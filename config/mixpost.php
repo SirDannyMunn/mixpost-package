@@ -139,6 +139,15 @@ return [
                 'videos' => 1,
                 'allow_mixing' => false,
             ]
+        ],
+        'instagram' => [
+            'simultaneous_posting_on_multiple_accounts' => true,
+            'post_character_limit' => 2200,
+            'media_limit' => [
+                'photos' => 10,
+                'videos' => 1,
+                'allow_mixing' => true,
+            ]
         ]
     ],
 ];
