@@ -130,6 +130,15 @@ return [
                 'videos' => 1,
                 'allow_mixing' => false,
             ]
+        ],
+        'linkedin' => [
+            'simultaneous_posting_on_multiple_accounts' => true,
+            'post_character_limit' => 3000,
+            'media_limit' => [
+                'photos' => 9,
+                'videos' => 1,
+                'allow_mixing' => false,
+            ]
         ]
     ],
 ];
