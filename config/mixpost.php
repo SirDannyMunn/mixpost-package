@@ -155,6 +155,13 @@ return [
             'media_limit' => [
                 'videos' => 1,
             ]
+        ],
+        'pinterest' => [
+            'simultaneous_posting_on_multiple_accounts' => true,
+            'post_character_limit' => 500,
+            'media_limit' => [
+                'photos' => 1,
+            ]
         ]
     ],
 ];
