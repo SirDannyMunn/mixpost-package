@@ -60,7 +60,7 @@ class RefreshAccessTokens extends Command
         }
 
         // Skip providers without refresh capability
-        if (!isset($accessToken['refresh_token']) && $account->provider !== 'instagram') {
+        if (!isset($accessToken['refresh_token']) && !in_array($account->provider, ['instagram', 'threads'])) {
             return false;
         }
 
@@ -96,8 +96,8 @@ class RefreshAccessTokens extends Command
             $accessToken = $account->access_token;
 
             // Get the appropriate refresh parameter based on provider
-            if ($account->provider === 'instagram') {
-                // Instagram uses access_token itself to refresh
+            if (in_array($account->provider, ['instagram', 'threads'])) {
+                // Instagram and Threads use access_token itself to refresh
                 $refreshParam = $accessToken['access_token'];
             } else {
                 // Most providers use refresh_token
