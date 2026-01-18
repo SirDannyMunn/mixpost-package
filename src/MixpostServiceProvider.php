@@ -14,6 +14,7 @@ use Inovector\Mixpost\Commands\ImportAccountData;
 use Inovector\Mixpost\Commands\ProcessMetrics;
 use Inovector\Mixpost\Commands\PruneTemporaryDirectory;
 use Inovector\Mixpost\Commands\PublishAssetsCommand;
+use Inovector\Mixpost\Commands\RefreshAccessTokens;
 use Inovector\Mixpost\Commands\RunScheduledPosts;
 use Inovector\Mixpost\Events\AccountAdded;
 use Inovector\Mixpost\Events\AccountUnauthorized;
@@ -47,6 +48,7 @@ class MixpostServiceProvider extends PackageServiceProvider
                 ClearSettingsCache::class,
                 ClearServicesCache::class,
                 RunScheduledPosts::class,
+                RefreshAccessTokens::class,
                 ImportAccountAudience::class,
                 ImportAccountData::class,
                 ProcessMetrics::class,

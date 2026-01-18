@@ -9,6 +9,7 @@ class Schedule
     public static function register(LaravelSchedule $schedule): void
     {
         $schedule->command('mixpost:run-scheduled-posts')->everyMinute();
+        $schedule->command('mixpost:refresh-access-tokens')->daily();
         $schedule->command('mixpost:import-account-data')->everyTwoHours();
         $schedule->command('mixpost:import-account-audience')->everyThreeHours();
         $schedule->command('mixpost:process-metrics')->everyThreeHours();
