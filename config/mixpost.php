@@ -148,6 +148,13 @@ return [
                 'videos' => 1,
                 'allow_mixing' => true,
             ]
+        ],
+        'youtube' => [
+            'simultaneous_posting_on_multiple_accounts' => true,
+            'post_character_limit' => 5000,
+            'media_limit' => [
+                'videos' => 1,
+            ]
         ]
     ],
 ];
