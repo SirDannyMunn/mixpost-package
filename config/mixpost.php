@@ -121,6 +121,15 @@ return [
                 'gifs' => 1,
                 'allow_mixing' => false,
             ]
+        ],
+        'tiktok' => [
+            'simultaneous_posting_on_multiple_accounts' => true,
+            'post_character_limit' => 2200,
+            'media_limit' => [
+                'photos' => 35,
+                'videos' => 1,
+                'allow_mixing' => false,
+            ]
         ]
     ],
 ];
