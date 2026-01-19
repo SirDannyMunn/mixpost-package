@@ -9,12 +9,16 @@ trait ManagesOAuth
 {
     public function getAuthUrl(): string
     {
+        // Use encrypted state from values if provided (cross-domain OAuth)
+        // Falls back to csrf_token for standard Mixpost admin flows
+        $state = $this->values['oauth_state'] ?? csrf_token();
+        
         $params = http_build_query([
             'response_type' => 'code',
             'client_id' => $this->clientId,
             'redirect_uri' => $this->redirectUrl,
             'scope' => 'boards:read,pins:read,pins:write',
-            'state' => csrf_token()
+            'state' => $state
         ]);
 
         return "https://www.pinterest.com/oauth/?{$params}";

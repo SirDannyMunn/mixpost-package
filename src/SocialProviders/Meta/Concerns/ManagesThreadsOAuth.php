@@ -8,11 +8,16 @@ trait ManagesThreadsOAuth
 {
     public function getAuthUrl(): string
     {
+        // Use encrypted state from values if provided (cross-domain OAuth)
+        // Falls back to csrf_token for standard Mixpost admin flows
+        $state = $this->values['oauth_state'] ?? csrf_token();
+        
         $params = [
             'client_id' => $this->clientId,
             'redirect_uri' => $this->redirectUrl,
             'scope' => 'threads_basic,threads_content_publish',
             'response_type' => 'code',
+            'state' => $state,
         ];
 
         return 'https://threads.net/oauth/authorize?' . http_build_query($params);

@@ -9,6 +9,11 @@ class TikTokService extends Service
 {
     public static array $exposedFormAttributes = [];
 
+    public static function name(): string
+    {
+        return 'tiktok';
+    }
+
     public static function group(): ServiceGroup
     {
         return ServiceGroup::SOCIAL;

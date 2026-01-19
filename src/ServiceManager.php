@@ -12,9 +12,15 @@ use Inovector\Mixpost\Collection\ServiceCollection;
 use Inovector\Mixpost\Exceptions\ServiceNotRegistered;
 use Inovector\Mixpost\Models\Service as ServiceModel;
 use Inovector\Mixpost\Services\FacebookService;
+use Inovector\Mixpost\Services\InstagramService;
+use Inovector\Mixpost\Services\LinkedInService;
+use Inovector\Mixpost\Services\PinterestService;
 use Inovector\Mixpost\Services\TenorService;
+use Inovector\Mixpost\Services\ThreadsService;
+use Inovector\Mixpost\Services\TikTokService;
 use Inovector\Mixpost\Services\TwitterService;
 use Inovector\Mixpost\Services\UnsplashService;
+use Inovector\Mixpost\Services\YouTubeService;
 use Inovector\Mixpost\Support\Log;
 
 class ServiceManager
@@ -31,9 +37,15 @@ class ServiceManager
     {
         return [
             FacebookService::class,
+            InstagramService::class,
+            LinkedInService::class,
+            PinterestService::class,
+            TenorService::class,
+            ThreadsService::class,
+            TikTokService::class,
             TwitterService::class,
             UnsplashService::class,
-            TenorService::class,
+            YouTubeService::class,
         ];
     }
 

@@ -10,15 +10,23 @@ trait ManagesInstagramOAuth
 {
     public function getAuthUrl(): string
     {
+        // Use encrypted state from values if provided (cross-domain OAuth)
+        // Falls back to csrf_token for standard Mixpost admin flows
+        $state = $this->values['oauth_state'] ?? csrf_token();
+        
+        // Instagram Basic Display API scopes
+        // For Instagram Business accounts, use Facebook OAuth with pages_show_list scope
+        $instagramScopes = 'instagram_business_basic,instagram_business_manage_messages';
+        
         $params = [
             'client_id' => $this->clientId,
             'redirect_uri' => $this->redirectUrl,
-            'scope' => $this->scope,
+            'scope' => $instagramScopes,
             'response_type' => 'code',
-            'config_id' => '',
+            'state' => $state,
         ];
 
-        return 'https://api.instagram.com/oauth/authorize?' . http_build_query($params);
+        return 'https://www.instagram.com/oauth/authorize?' . http_build_query($params);
     }
 
     public function requestAccessToken(array $params = []): array

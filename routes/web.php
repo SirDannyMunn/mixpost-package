@@ -126,6 +126,13 @@ Route::middleware([
 
         Route::post('logout', [AuthenticatedController::class, 'destroy'])
             ->name('logout');
+    });
 
+// OAuth callback route - MUST be outside auth middleware
+// OAuth is an out-of-band flow; the state parameter carries all context
+Route::middleware(['web'])
+    ->prefix('mixpost')
+    ->name('mixpost.')
+    ->group(function () {
         Route::get('callback/{provider}', CallbackSocialProviderController::class)->name('callbackSocialProvider');
     });

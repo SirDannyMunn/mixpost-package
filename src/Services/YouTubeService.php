@@ -9,6 +9,11 @@ class YouTubeService extends Service
 {
     public static array $exposedFormAttributes = [];
 
+    public static function name(): string
+    {
+        return 'youtube';
+    }
+
     public static function group(): ServiceGroup
     {
         return ServiceGroup::SOCIAL;

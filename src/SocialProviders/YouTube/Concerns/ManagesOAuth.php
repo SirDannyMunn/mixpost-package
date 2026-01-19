@@ -9,6 +9,10 @@ trait ManagesOAuth
 {
     public function getAuthUrl(): string
     {
+        // Use encrypted state from values if provided (cross-domain OAuth)
+        // Falls back to csrf_token for standard Mixpost admin flows
+        $state = $this->values['oauth_state'] ?? csrf_token();
+        
         $params = http_build_query([
             'client_id' => $this->clientId,
             'redirect_uri' => $this->redirectUrl,
@@ -16,7 +20,7 @@ trait ManagesOAuth
             'scope' => 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube https://www.googleapis.com/auth/userinfo.profile',
             'access_type' => 'offline',
             'prompt' => 'consent',
-            'state' => csrf_token()
+            'state' => $state
         ]);
 
         return "https://accounts.google.com/o/oauth2/v2/auth?{$params}";

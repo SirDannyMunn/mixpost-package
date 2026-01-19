@@ -71,7 +71,18 @@ abstract class SocialProvider implements SocialProviderContract
     {
         $this->accessToken = $token;
 
-        $this->request->session()->put(self::ACCESS_TOKEN_SESSION_NAME, $token);
+        // Only use session if available (web routes have session, API routes don't)
+        if ($this->request->hasSession()) {
+            $this->request->session()->put(self::ACCESS_TOKEN_SESSION_NAME, $token);
+        }
+    }
+    
+    /**
+     * Set access token without using session (for API/stateless contexts).
+     */
+    public function setAccessTokenStateless(array $token = []): void
+    {
+        $this->accessToken = $token;
     }
 
     public function getAccessToken()
@@ -80,13 +91,16 @@ abstract class SocialProvider implements SocialProviderContract
             return $this->accessToken;
         }
 
-        $token = $this->request->session()->get(self::ACCESS_TOKEN_SESSION_NAME);
+        // Only try session if available
+        if ($this->request->hasSession()) {
+            $token = $this->request->session()->get(self::ACCESS_TOKEN_SESSION_NAME);
 
-        if (!$token) {
-            throw new Exception('Missing Access Token.');
+            if ($token) {
+                return $token;
+            }
         }
 
-        return $token;
+        throw new Exception('Missing Access Token.');
     }
 
     // Use this method outside of web app. For example, in Jobs..etc.

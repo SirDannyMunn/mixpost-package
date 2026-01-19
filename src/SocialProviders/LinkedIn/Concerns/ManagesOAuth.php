@@ -9,12 +9,18 @@ trait ManagesOAuth
 {
     public function getAuthUrl(): string
     {
+        // Use encrypted state from values if provided (cross-domain OAuth)
+        // Falls back to csrf_token for standard Mixpost admin flows
+        $state = $this->values['oauth_state'] ?? csrf_token();
+        
+        // TODO: Add 'w_member_social' scope once "Share on LinkedIn" product is approved
+        // Currently only using OpenID scopes for sign-in
         $params = http_build_query([
             'response_type' => 'code',
             'client_id' => $this->clientId,
             'redirect_uri' => $this->redirectUrl,
-            'scope' => 'openid profile email w_member_social',
-            'state' => csrf_token()
+            'scope' => 'openid profile email',
+            'state' => $state
         ]);
 
         return "https://www.linkedin.com/oauth/v2/authorization?{$params}";

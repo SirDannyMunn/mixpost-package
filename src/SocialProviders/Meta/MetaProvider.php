@@ -53,31 +53,36 @@ class MetaProvider extends SocialProvider
 
     public function getSupportedScopeList(): array
     {
-        return match ($this->apiVersion) {
-            'v16.0' => [
-                'pages_show_list',
-                'read_insights',
-                'pages_manage_posts',
-                'pages_read_engagement',
-                'pages_manage_engagement',
-                'instagram_basic',
-                'instagram_content_publish',
-                'instagram_manage_insights',
-                'instagram_manage_comments',
-            ],
-            default => [
-                'business_management',
-                'pages_show_list',
-                'read_insights',
-                'pages_manage_posts',
-                'pages_read_engagement',
-                'pages_manage_engagement',
-                'instagram_basic',
-                'instagram_content_publish',
-                'instagram_manage_insights',
-                'instagram_manage_comments',
-            ]
-        };
+        // IMPORTANT: Only request minimal scopes for initial OAuth login.
+        // - email and public_profile are granted by default (don't include them)
+        // - Advanced scopes require Facebook App Review approval
+        //
+        // The page-level permissions will be handled in the entity selection flow
+        // after the user authenticates and selects which Page(s) to connect.
+        return [
+            'pages_show_list',       // Needed to list user's Pages
+            'business_management',   // Needed for business Pages
+        ];
+    }
+    
+    /**
+     * Get the full list of scopes needed for posting.
+     * These are requested after entity selection via re-auth or permission upgrade.
+     */
+    public function getFullScopeList(): array
+    {
+        return [
+            'pages_show_list',
+            'business_management',
+            'read_insights',
+            'pages_manage_posts',
+            'pages_read_engagement',
+            'pages_manage_engagement',
+            'instagram_basic',
+            'instagram_content_publish',
+            'instagram_manage_insights',
+            'instagram_manage_comments',
+        ];
     }
 
     public function getAuthUrl(): string
