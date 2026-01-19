@@ -100,10 +100,19 @@ class MixpostServiceProvider extends PackageServiceProvider
         $this->bootEvents();
 
         $this->registerExceptionHandler();
+        
+        $this->loadApiRoutes();
 
         Gate::define('viewMixpost', function () {
             return true;
         });
+    }
+    
+    protected function loadApiRoutes(): void
+    {
+        \Illuminate\Support\Facades\Route::middleware('api')
+            ->prefix('api')
+            ->group(__DIR__ . '/../routes/api.php');
     }
 
     protected function bootEvents(): void

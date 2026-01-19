@@ -2,7 +2,6 @@
 
 namespace Inovector\Mixpost\Http\Controllers;
 
-use App\Models\SocialAccount;
 use App\Services\OAuthStateService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -11,6 +10,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 use Inovector\Mixpost\Actions\UpdateOrCreateAccount;
 use Inovector\Mixpost\Facades\SocialProviderManager;
+use Inovector\Mixpost\Models\Account;
 
 class CallbackSocialProviderController extends Controller
 {
@@ -153,7 +153,8 @@ class CallbackSocialProviderController extends Controller
                 'success' => 'true',
                 'platform' => $providerName,
                 'account_id' => (string) $socialAccount->id,
-                'username' => $socialAccount->username ?? $socialAccount->display_name ?? '',
+                'account_uuid' => $socialAccount->uuid,
+                'username' => $socialAccount->username ?? $socialAccount->name ?? '',
             ]);
 
         } catch (\Exception $e) {
@@ -206,27 +207,26 @@ class CallbackSocialProviderController extends Controller
         array $accessToken,
         string|int|null $organizationId,
         string|int|null $userId
-    ): SocialAccount {
-        return SocialAccount::updateOrCreate(
-            [
-                'organization_id' => $organizationId,
-                'platform' => $providerName,
-                'platform_user_id' => $accountContext['id'] ?? $accountContext['provider_id'] ?? null,
-            ],
-            [
-                'username' => $accountContext['username'] ?? $accountContext['name'] ?? null,
-                'display_name' => $accountContext['name'] ?? $accountContext['username'] ?? null,
-                'avatar_url' => $accountContext['image'] ?? $accountContext['avatar'] ?? null,
-                'access_token' => $accessToken['access_token'] ?? null,
-                'refresh_token' => $accessToken['refresh_token'] ?? null,
-                'token_expires_at' => isset($accessToken['expires_in']) 
-                    ? now()->addSeconds($accessToken['expires_in']) 
-                    : null,
-                'scopes' => $accessToken['scope'] ?? null,
-                'connected_by' => $userId,
-                'is_active' => true,
-                'connected_at' => now(),
-            ]
+    ): Account {
+        // Use Mixpost's standard account creation flow
+        // The UpdateOrCreateAccount action handles image upload and proper data structure
+        $updateOrCreateAccount = app(UpdateOrCreateAccount::class);
+        
+        $accountData = [
+            'id' => $accountContext['id'] ?? $accountContext['provider_id'] ?? null,
+            'name' => $accountContext['name'] ?? $accountContext['username'] ?? '',
+            'username' => $accountContext['username'] ?? $accountContext['name'] ?? null,
+            'image' => $accountContext['image'] ?? $accountContext['avatar'] ?? null,
+            'data' => $accountContext['data'] ?? null,
+        ];
+
+        // Use the updated action that supports organization context
+        return $updateOrCreateAccount(
+            $providerName, 
+            $accountData, 
+            $accessToken,
+            $organizationId,
+            $userId
         );
     }
     

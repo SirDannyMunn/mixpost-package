@@ -2,6 +2,7 @@
 
 namespace Inovector\Mixpost\Models;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
@@ -16,9 +17,13 @@ use Inovector\Mixpost\Support\SocialProviderPostConfigs;
 class Account extends Model
 {
     use HasFactory;
-    use HasUuid;
+    use HasUuids;  // Laravel's built-in UUID support for primary key
+    use HasUuid;   // Mixpost's additional uuid column support
 
     protected $table = 'mixpost_accounts';
+    
+    protected $keyType = 'string';
+    public $incrementing = false;
 
     protected $fillable = [
         'name',
@@ -28,14 +33,19 @@ class Account extends Model
         'provider_id',
         'data',
         'authorized',
-        'access_token'
+        'access_token',
+        // Organization context fields (added for multi-tenant support)
+        'organization_id',
+        'connected_by',
+        'connected_at',
     ];
 
     protected $casts = [
         'media' => AccountMediaCast::class,
         'data' => 'array',
         'authorized' => 'boolean',
-        'access_token' => EncryptArrayObject::class
+        'access_token' => EncryptArrayObject::class,
+        'connected_at' => 'datetime',
     ];
 
     protected $hidden = [
