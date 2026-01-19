@@ -12,7 +12,8 @@ class SocialProviderResponse
         private array                                 $context,
         private readonly bool                         $rateLimitAboutToBeExceeded = false,
         private readonly int                          $retryAfter = 0,
-        private readonly bool                         $isAppLevel = false
+        private readonly bool                         $isAppLevel = false,
+        private readonly ?string                      $errorMessage = null
     )
     {
     }
@@ -70,6 +71,11 @@ class SocialProviderResponse
     public function isAppLevel(): bool
     {
         return $this->isAppLevel;
+    }
+
+    public function errorMessage(): ?string
+    {
+        return $this->errorMessage;
     }
 
     public function useContext(array $value): static

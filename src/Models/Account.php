@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
 use Inovector\Mixpost\Casts\AccountMediaCast;
 use Inovector\Mixpost\Casts\EncryptArrayObject;
+use Inovector\Mixpost\Concerns\Model\BelongsToOrganization;
 use Inovector\Mixpost\Concerns\Model\HasUuid;
 use Inovector\Mixpost\Events\AccountUnauthorized;
 use Inovector\Mixpost\Facades\SocialProviderManager;
@@ -19,6 +20,7 @@ class Account extends Model
     use HasFactory;
     use HasUuids;  // Laravel's built-in UUID support for primary key
     use HasUuid;   // Mixpost's additional uuid column support
+    use BelongsToOrganization;
 
     protected $table = 'mixpost_accounts';
     
@@ -26,6 +28,9 @@ class Account extends Model
     public $incrementing = false;
 
     protected $fillable = [
+        'organization_id',
+        'connected_by',
+        'connected_at',
         'name',
         'username',
         'media',
@@ -34,10 +39,6 @@ class Account extends Model
         'data',
         'authorized',
         'access_token',
-        // Organization context fields (added for multi-tenant support)
-        'organization_id',
-        'connected_by',
-        'connected_at',
     ];
 
     protected $casts = [

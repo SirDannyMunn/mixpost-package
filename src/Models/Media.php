@@ -3,10 +3,12 @@
 namespace Inovector\Mixpost\Models;
 
 use Illuminate\Contracts\Filesystem\Filesystem;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Inovector\Mixpost\Concerns\Model\BelongsToOrganization;
 use Inovector\Mixpost\Concerns\Model\HasUuid;
 use Inovector\Mixpost\Support\MediaFilesystem;
 use Inovector\Mixpost\Support\MediaTemporaryDirectory;
@@ -17,11 +19,15 @@ use Exception;
 class Media extends Model
 {
     use HasFactory;
+    use HasUuids;
     use HasUuid;
+    use BelongsToOrganization;
 
     public $table = 'mixpost_media';
 
     protected $fillable = [
+        'organization_id',
+        'uploaded_by',
         'name',
         'mime_type',
         'disk',

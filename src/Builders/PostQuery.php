@@ -17,7 +17,8 @@ class PostQuery implements Query
 {
     public static function apply(Request $request): Builder
     {
-        $query = Post::with('accounts', 'versions', 'tags');
+        $query = Post::with('accounts', 'versions', 'tags')
+            ->forCurrentOrganization();
 
         if ($request->has('status') && $request->get('status') !== null) {
             $query = PostStatus::apply($query, $request->get('status'));

@@ -21,10 +21,10 @@ class AccountPublishPost
 
         if (empty($content)) {
             $errors = ['This account version has no content.'];
+            $response = new SocialProviderResponse(SocialProviderResponseStatus::ERROR, $errors);
+            $post->insertErrors($account, $errors, $response);
 
-            $post->insertErrors($account, $errors);
-
-            return new SocialProviderResponse(SocialProviderResponseStatus::ERROR, $errors);
+            return $response;
         }
 
         $response = $this->connectProvider($account)->publishPost(
@@ -34,7 +34,11 @@ class AccountPublishPost
         );
 
         if ($response->hasError()) {
-            $post->insertErrors($account, $response->context());
+            $errorInfo = $response->context();
+            if (empty($errorInfo) && $response->errorMessage()) {
+                $errorInfo = ['message' => $response->errorMessage()];
+            }
+            $post->insertErrors($account, $errorInfo, $response);
 
             return $response;
         }

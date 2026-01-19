@@ -10,9 +10,9 @@ class PostFormRequest extends FormRequest
     {
         return [
             'accounts' => ['array'],
-            'accounts.*' => ['integer'],
+            'accounts.*' => ['nullable', 'uuid'],
             'tags' => ['array'],
-            'tags.*' => ['integer'],
+            'tags.*' => ['uuid'],
             'date' => ['nullable', 'date', 'date_format:Y-m-d'],
             'time' => ['nullable', 'date_format:H:i'],
             'versions' => ['required', 'array', 'min:1'],

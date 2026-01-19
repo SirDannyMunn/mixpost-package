@@ -84,221 +84,276 @@ trait ManagesResources
     protected function publishTextPost(string $text, string $personUrn, array $accessToken): SocialProviderResponse
     {
         try {
-            $response = Http::withToken($accessToken['access_token'])
+            // Use the new Posts API (v2/posts) instead of deprecated ugcPosts
+            $httpResponse = Http::withToken($accessToken['access_token'])
                 ->withHeaders([
+                    'LinkedIn-Version' => '202601',
                     'X-Restli-Protocol-Version' => '2.0.0',
                     'Content-Type' => 'application/json'
                 ])
-                ->post("{$this->apiUrl}/{$this->apiVersion}/ugcPosts", [
+                ->post("{$this->apiUrl}/rest/posts", [
                     'author' => "urn:li:person:{$personUrn}",
-                    'lifecycleState' => 'PUBLISHED',
-                    'specificContent' => [
-                        'com.linkedin.ugc.ShareContent' => [
-                            'shareCommentary' => [
-                                'text' => $text
-                            ],
-                            'shareMediaCategory' => 'NONE'
-                        ]
+                    'commentary' => $text,
+                    'visibility' => 'PUBLIC',
+                    'distribution' => [
+                        'feedDistribution' => 'MAIN_FEED',
+                        'targetEntities' => [],
+                        'thirdPartyDistributionChannels' => []
                     ],
-                    'visibility' => [
-                        'com.linkedin.ugc.MemberNetworkVisibility' => 'PUBLIC'
-                    ]
-                ])
-                ->throw()
-                ->json();
+                    'lifecycleState' => 'PUBLISHED',
+                    'isReshareDisabledByAuthor' => false
+                ]);
+            
+            $response = $httpResponse->json();
+            
+            if ($httpResponse->failed()) {
+                return $this->response(SocialProviderResponseStatus::ERROR, [
+                    'http_status' => $httpResponse->status(),
+                    'response_body' => $response,
+                    'request_url' => "{$this->apiUrl}/rest/posts",
+                ], 'LinkedIn API error: ' . ($response['message'] ?? $httpResponse->status()));
+            }
 
-            if (isset($response['id'])) {
+            // The new Posts API returns the post URN in the x-restli-id header
+            $postId = $httpResponse->header('x-restli-id') ?? ($response['id'] ?? null);
+            
+            if ($postId) {
                 return $this->response(SocialProviderResponseStatus::OK, [
-                    'id' => $response['id']
+                    'id' => $postId,
+                    'http_status' => $httpResponse->status(),
+                    'full_response' => $response,
                 ]);
             }
 
-            return $this->response(SocialProviderResponseStatus::ERROR, null, 'Failed to publish text post');
+            return $this->response(SocialProviderResponseStatus::ERROR, [
+                'http_status' => $httpResponse->status(),
+                'response_body' => $response,
+                'headers' => $httpResponse->headers(),
+            ], 'Failed to publish text post - no ID returned');
         } catch (RequestException $e) {
-            return $this->response(SocialProviderResponseStatus::ERROR, null, $e->getMessage());
+            return $this->response(SocialProviderResponseStatus::ERROR, [
+                'exception' => get_class($e),
+                'http_status' => $e->response?->status(),
+                'response_body' => $e->response?->json(),
+            ], $e->getMessage());
         }
     }
 
     protected function publishImagePost(string $text, Collection $media, string $personUrn, array $accessToken): SocialProviderResponse
     {
         try {
-            $assets = [];
+            $imageUrns = [];
 
-            // Register and upload each image
+            // Register and upload each image using the new Images API
             foreach ($media as $item) {
                 if (!$item->isImage()) {
                     continue;
                 }
 
-                // Step 1: Register upload for image
-                $registerResponse = Http::withToken($accessToken['access_token'])
+                // Step 1: Initialize image upload
+                $initResponse = Http::withToken($accessToken['access_token'])
                     ->withHeaders([
+                        'LinkedIn-Version' => '202601',
                         'X-Restli-Protocol-Version' => '2.0.0',
                         'Content-Type' => 'application/json'
                     ])
-                    ->post("{$this->apiUrl}/{$this->apiVersion}/assets?action=registerUpload", [
-                        'registerUploadRequest' => [
-                            'recipes' => ['urn:li:digitalmediaRecipe:feedshare-image'],
-                            'owner' => "urn:li:person:{$personUrn}",
-                            'serviceRelationships' => [
-                                [
-                                    'relationshipType' => 'OWNER',
-                                    'identifier' => 'urn:li:userGeneratedContent'
-                                ]
-                            ]
+                    ->post("{$this->apiUrl}/rest/images?action=initializeUpload", [
+                        'initializeUploadRequest' => [
+                            'owner' => "urn:li:person:{$personUrn}"
                         ]
-                    ])
-                    ->throw()
-                    ->json();
+                    ]);
 
-                if (!isset($registerResponse['value']['asset'])) {
+                if ($initResponse->failed()) {
                     continue;
                 }
 
-                $asset = $registerResponse['value']['asset'];
-                $uploadUrl = $registerResponse['value']['uploadMechanism']['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest']['uploadUrl'];
+                $initData = $initResponse->json();
+                $uploadUrl = $initData['value']['uploadUrl'] ?? null;
+                $imageUrn = $initData['value']['image'] ?? null;
+
+                if (!$uploadUrl || !$imageUrn) {
+                    continue;
+                }
 
                 // Step 2: Upload image binary
                 $imagePath = $item->isLocalAdapter() ? $item->getFullPath() : $item->getUrl();
                 $uploadResponse = Http::withHeaders([
                     'Authorization' => "Bearer {$accessToken['access_token']}",
-                    'Content-Type' => $item->mime_type
-                ])->put($uploadUrl, file_get_contents($imagePath));
+                ])->attach('file', file_get_contents($imagePath), 'image')->put($uploadUrl, file_get_contents($imagePath));
 
                 if ($uploadResponse->successful()) {
-                    $assets[] = $asset;
+                    $imageUrns[] = $imageUrn;
                 }
             }
 
-            if (empty($assets)) {
+            if (empty($imageUrns)) {
                 return $this->response(SocialProviderResponseStatus::ERROR, null, 'Failed to upload images');
             }
 
-            // Step 3: Create post with uploaded images
-            $mediaContent = array_map(function ($asset) {
+            // Step 3: Create post with uploaded images using new Posts API
+            $mediaContent = array_map(function ($imageUrn) {
                 return [
-                    'status' => 'READY',
-                    'media' => $asset
+                    'id' => $imageUrn
                 ];
-            }, $assets);
+            }, $imageUrns);
 
-            $response = Http::withToken($accessToken['access_token'])
+            $httpResponse = Http::withToken($accessToken['access_token'])
                 ->withHeaders([
+                    'LinkedIn-Version' => '202601',
                     'X-Restli-Protocol-Version' => '2.0.0',
                     'Content-Type' => 'application/json'
                 ])
-                ->post("{$this->apiUrl}/{$this->apiVersion}/ugcPosts", [
+                ->post("{$this->apiUrl}/rest/posts", [
                     'author' => "urn:li:person:{$personUrn}",
-                    'lifecycleState' => 'PUBLISHED',
-                    'specificContent' => [
-                        'com.linkedin.ugc.ShareContent' => [
-                            'shareCommentary' => [
-                                'text' => $text
-                            ],
-                            'shareMediaCategory' => 'IMAGE',
-                            'media' => $mediaContent
+                    'commentary' => $text,
+                    'visibility' => 'PUBLIC',
+                    'distribution' => [
+                        'feedDistribution' => 'MAIN_FEED',
+                        'targetEntities' => [],
+                        'thirdPartyDistributionChannels' => []
+                    ],
+                    'content' => [
+                        'multiImage' => [
+                            'images' => $mediaContent
                         ]
                     ],
-                    'visibility' => [
-                        'com.linkedin.ugc.MemberNetworkVisibility' => 'PUBLIC'
-                    ]
-                ])
-                ->throw()
-                ->json();
+                    'lifecycleState' => 'PUBLISHED',
+                    'isReshareDisabledByAuthor' => false
+                ]);
 
-            if (isset($response['id'])) {
+            $response = $httpResponse->json();
+            $postId = $httpResponse->header('x-restli-id') ?? ($response['id'] ?? null);
+
+            if ($postId) {
                 return $this->response(SocialProviderResponseStatus::OK, [
-                    'id' => $response['id']
+                    'id' => $postId,
+                    'http_status' => $httpResponse->status(),
                 ]);
             }
 
-            return $this->response(SocialProviderResponseStatus::ERROR, null, 'Failed to publish image post');
+            return $this->response(SocialProviderResponseStatus::ERROR, [
+                'http_status' => $httpResponse->status(),
+                'response_body' => $response,
+            ], 'Failed to publish image post');
         } catch (RequestException $e) {
-            return $this->response(SocialProviderResponseStatus::ERROR, null, $e->getMessage());
+            return $this->response(SocialProviderResponseStatus::ERROR, [
+                'exception' => get_class($e),
+                'http_status' => $e->response?->status(),
+                'response_body' => $e->response?->json(),
+            ], $e->getMessage());
         }
     }
 
     protected function publishVideoPost(string $text, $media, string $personUrn, array $accessToken): SocialProviderResponse
     {
         try {
-            // Step 1: Register video upload
-            $registerResponse = Http::withToken($accessToken['access_token'])
+            // Step 1: Initialize video upload using the new Videos API
+            $initResponse = Http::withToken($accessToken['access_token'])
                 ->withHeaders([
+                    'LinkedIn-Version' => '202601',
                     'X-Restli-Protocol-Version' => '2.0.0',
                     'Content-Type' => 'application/json'
                 ])
-                ->post("{$this->apiUrl}/{$this->apiVersion}/assets?action=registerUpload", [
-                    'registerUploadRequest' => [
-                        'recipes' => ['urn:li:digitalmediaRecipe:feedshare-video'],
+                ->post("{$this->apiUrl}/rest/videos?action=initializeUpload", [
+                    'initializeUploadRequest' => [
                         'owner' => "urn:li:person:{$personUrn}",
-                        'serviceRelationships' => [
-                            [
-                                'relationshipType' => 'OWNER',
-                                'identifier' => 'urn:li:userGeneratedContent'
-                            ]
-                        ]
+                        'fileSizeBytes' => $media->size,
+                        'uploadCaptions' => false,
+                        'uploadThumbnail' => false
                     ]
-                ])
-                ->throw()
-                ->json();
+                ]);
 
-            if (!isset($registerResponse['value']['asset'])) {
-                return $this->response(SocialProviderResponseStatus::ERROR, null, 'Failed to register video upload');
+            if ($initResponse->failed()) {
+                return $this->response(SocialProviderResponseStatus::ERROR, [
+                    'http_status' => $initResponse->status(),
+                    'response_body' => $initResponse->json(),
+                ], 'Failed to initialize video upload');
             }
 
-            $asset = $registerResponse['value']['asset'];
-            $uploadUrl = $registerResponse['value']['uploadMechanism']['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest']['uploadUrl'];
+            $initData = $initResponse->json();
+            $uploadUrl = $initData['value']['uploadInstructions'][0]['uploadUrl'] ?? null;
+            $videoUrn = $initData['value']['video'] ?? null;
+
+            if (!$uploadUrl || !$videoUrn) {
+                return $this->response(SocialProviderResponseStatus::ERROR, [
+                    'response_body' => $initData,
+                ], 'Failed to get video upload URL');
+            }
 
             // Step 2: Upload video binary
             $videoPath = $media->isLocalAdapter() ? $media->getFullPath() : $media->getUrl();
             $uploadResponse = Http::withHeaders([
                 'Authorization' => "Bearer {$accessToken['access_token']}",
-                'Content-Type' => $media->mime_type
-            ])->put($uploadUrl, file_get_contents($videoPath));
+                'Content-Type' => 'application/octet-stream',
+            ])->withBody(file_get_contents($videoPath), 'application/octet-stream')
+              ->put($uploadUrl);
 
             if (!$uploadResponse->successful()) {
-                return $this->response(SocialProviderResponseStatus::ERROR, null, 'Failed to upload video file');
+                return $this->response(SocialProviderResponseStatus::ERROR, [
+                    'http_status' => $uploadResponse->status(),
+                ], 'Failed to upload video file');
             }
 
-            // Step 3: Create post with uploaded video
-            $response = Http::withToken($accessToken['access_token'])
+            // Step 3: Finalize video upload
+            $finalizeResponse = Http::withToken($accessToken['access_token'])
                 ->withHeaders([
+                    'LinkedIn-Version' => '202601',
                     'X-Restli-Protocol-Version' => '2.0.0',
                     'Content-Type' => 'application/json'
                 ])
-                ->post("{$this->apiUrl}/{$this->apiVersion}/ugcPosts", [
+                ->post("{$this->apiUrl}/rest/videos?action=finalizeUpload", [
+                    'finalizeUploadRequest' => [
+                        'video' => $videoUrn,
+                        'uploadToken' => '',
+                        'uploadedPartIds' => []
+                    ]
+                ]);
+
+            // Step 4: Create post with uploaded video using new Posts API
+            $httpResponse = Http::withToken($accessToken['access_token'])
+                ->withHeaders([
+                    'LinkedIn-Version' => '202601',
+                    'X-Restli-Protocol-Version' => '2.0.0',
+                    'Content-Type' => 'application/json'
+                ])
+                ->post("{$this->apiUrl}/rest/posts", [
                     'author' => "urn:li:person:{$personUrn}",
-                    'lifecycleState' => 'PUBLISHED',
-                    'specificContent' => [
-                        'com.linkedin.ugc.ShareContent' => [
-                            'shareCommentary' => [
-                                'text' => $text
-                            ],
-                            'shareMediaCategory' => 'VIDEO',
-                            'media' => [
-                                [
-                                    'status' => 'READY',
-                                    'media' => $asset
-                                ]
-                            ]
+                    'commentary' => $text,
+                    'visibility' => 'PUBLIC',
+                    'distribution' => [
+                        'feedDistribution' => 'MAIN_FEED',
+                        'targetEntities' => [],
+                        'thirdPartyDistributionChannels' => []
+                    ],
+                    'content' => [
+                        'media' => [
+                            'id' => $videoUrn
                         ]
                     ],
-                    'visibility' => [
-                        'com.linkedin.ugc.MemberNetworkVisibility' => 'PUBLIC'
-                    ]
-                ])
-                ->throw()
-                ->json();
+                    'lifecycleState' => 'PUBLISHED',
+                    'isReshareDisabledByAuthor' => false
+                ]);
 
-            if (isset($response['id'])) {
+            $response = $httpResponse->json();
+            $postId = $httpResponse->header('x-restli-id') ?? ($response['id'] ?? null);
+
+            if ($postId) {
                 return $this->response(SocialProviderResponseStatus::OK, [
-                    'id' => $response['id']
+                    'id' => $postId,
+                    'http_status' => $httpResponse->status(),
                 ]);
             }
 
-            return $this->response(SocialProviderResponseStatus::ERROR, null, 'Failed to publish video post');
+            return $this->response(SocialProviderResponseStatus::ERROR, [
+                'http_status' => $httpResponse->status(),
+                'response_body' => $response,
+            ], 'Failed to publish video post');
         } catch (RequestException $e) {
-            return $this->response(SocialProviderResponseStatus::ERROR, null, $e->getMessage());
+            return $this->response(SocialProviderResponseStatus::ERROR, [
+                'exception' => get_class($e),
+                'http_status' => $e->response?->status(),
+                'response_body' => $e->response?->json(),
+            ], $e->getMessage());
         }
     }
 

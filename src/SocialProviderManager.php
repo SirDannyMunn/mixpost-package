@@ -120,6 +120,9 @@ class SocialProviderManager extends SocialProviderManagerAbstract
     {
         $config = ServiceManager::get('tiktok', 'configuration');
 
+        // TikTok uses 'client_key' but buildConnectionProvider expects 'client_id'
+        $config['client_id'] = $config['client_key'] ?? '';
+
         $config['redirect'] = route('mixpost.callbackSocialProvider', ['provider' => 'tiktok']);
 
         return $this->buildConnectionProvider(TikTokProvider::class, $config);

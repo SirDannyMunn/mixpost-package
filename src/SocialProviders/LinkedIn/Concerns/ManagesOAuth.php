@@ -13,13 +13,14 @@ trait ManagesOAuth
         // Falls back to csrf_token for standard Mixpost admin flows
         $state = $this->values['oauth_state'] ?? csrf_token();
         
-        // TODO: Add 'w_member_social' scope once "Share on LinkedIn" product is approved
-        // Currently only using OpenID scopes for sign-in
+        // Scopes required for the new Posts API:
+        // - openid, profile, email: Required for user info
+        // - w_member_social: Required for posting content on behalf of the member
         $params = http_build_query([
             'response_type' => 'code',
             'client_id' => $this->clientId,
             'redirect_uri' => $this->redirectUrl,
-            'scope' => 'openid profile email',
+            'scope' => 'openid profile email w_member_social',
             'state' => $state
         ]);
 

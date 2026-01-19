@@ -36,8 +36,8 @@ class PostsApiController extends Controller
         EagerLoadPostVersionsMedia::apply($posts);
 
         return response()->json([
-            'accounts' => AccountResource::collection(Account::oldest()->get())->resolve(),
-            'tags' => TagResource::collection(Tag::latest()->get())->resolve(),
+            'accounts' => AccountResource::collection(Account::forCurrentOrganization()->oldest()->get())->resolve(),
+            'tags' => TagResource::collection(Tag::forCurrentOrganization()->latest()->get())->resolve(),
             'filter' => [
                 'keyword' => $request->query('keyword', ''),
                 'status' => $request->query('status'),
@@ -49,7 +49,7 @@ class PostsApiController extends Controller
                     'accounts' => Arr::map($request->query('accounts', []), 'intval')
                 ]
             ]),
-            'has_failed_posts' => Post::failed()->exists()
+            'has_failed_posts' => Post::forCurrentOrganization()->failed()->exists()
         ]);
     }
 
@@ -60,8 +60,8 @@ class PostsApiController extends Controller
     {
         return response()->json([
             'default_accounts' => Settings::get('default_accounts'),
-            'accounts' => AccountResource::collection(Account::oldest()->get())->resolve(),
-            'tags' => TagResource::collection(Tag::latest()->get())->resolve(),
+            'accounts' => AccountResource::collection(Account::forCurrentOrganization()->oldest()->get())->resolve(),
+            'tags' => TagResource::collection(Tag::forCurrentOrganization()->latest()->get())->resolve(),
             'is_configured_service' => ServiceManager::isActive(),
         ]);
     }
@@ -87,15 +87,16 @@ class PostsApiController extends Controller
      */
     public function show(Request $request, string $post): JsonResponse
     {
-        $postModel = Post::firstOrFailTrashedByUuid($post);
+        $postModel = Post::forCurrentOrganization()
+            ->firstOrFailTrashedByUuid($post);
 
         $postModel->load('accounts', 'versions', 'tags');
 
         EagerLoadPostVersionsMedia::apply($postModel);
 
         return response()->json([
-            'accounts' => AccountResource::collection(Account::oldest()->get())->resolve(),
-            'tags' => TagResource::collection(Tag::latest()->get())->resolve(),
+            'accounts' => AccountResource::collection(Account::forCurrentOrganization()->oldest()->get())->resolve(),
+            'tags' => TagResource::collection(Tag::forCurrentOrganization()->latest()->get())->resolve(),
             'post' => new PostResource($postModel),
             'is_configured_service' => ServiceManager::isActive(),
             'service_configs' => ServiceManager::exposedConfiguration(),
@@ -119,7 +120,9 @@ class PostsApiController extends Controller
      */
     public function destroy(Request $request, string $post): JsonResponse
     {
-        Post::where('uuid', $post)->delete();
+        Post::forCurrentOrganization()
+            ->where('uuid', $post)
+            ->delete();
 
         return response()->json([
             'message' => 'Post deleted successfully',

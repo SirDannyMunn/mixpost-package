@@ -14,6 +14,8 @@ class DuplicatePostController extends Controller
     {
         DB::transaction(function () use ($post) {
             $newPost = Post::create([
+                'organization_id' => $post->organization_id,
+                'created_by' => Post::getCurrentUserId(),
                 'status' => PostStatus::DRAFT
             ]);
 

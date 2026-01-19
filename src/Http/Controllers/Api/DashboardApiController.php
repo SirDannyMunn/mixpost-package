@@ -15,7 +15,7 @@ class DashboardApiController extends Controller
     public function __invoke(): JsonResponse
     {
         return response()->json([
-            'accounts' => AccountResource::collection(Account::oldest()->get())->resolve(),
+            'accounts' => AccountResource::collection(Account::forCurrentOrganization()->oldest()->get())->resolve(),
         ]);
     }
 }

@@ -86,6 +86,7 @@ class ImportTwitterFollowersJob implements ShouldQueue
             'account_id' => $this->account->id,
             'date' => Carbon::today('UTC')
         ], [
+            'organization_id' => $this->account->organization_id,
             'total' => $response->followers_count
         ]);
     }

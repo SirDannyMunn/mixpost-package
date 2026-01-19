@@ -16,11 +16,21 @@ class SaveSettings extends FormRequest
     public function handle(): void
     {
         $schema = SettingsFacade::form();
+        $organizationId = SettingModel::getOrganizationIdForCreate();
 
         foreach ($schema as $name => $defaultPayload) {
             $payload = $this->input($name, $defaultPayload);
 
-            SettingModel::updateOrCreate(['name' => $name], ['payload' => $payload]);
+            // Include organization_id in the unique key for multi-tenant support
+            $uniqueKey = ['name' => $name];
+            if ($organizationId !== null) {
+                $uniqueKey['organization_id'] = $organizationId;
+            }
+
+            SettingModel::updateOrCreate($uniqueKey, [
+                'organization_id' => $organizationId,
+                'payload' => $payload
+            ]);
 
             SettingsFacade::put($name, $payload);
         }

@@ -63,6 +63,8 @@ class MediaUploader
         }
 
         return [
+            'organization_id' => Media::getOrganizationIdForCreate(),
+            'uploaded_by' => Media::getCurrentUserId(),
             'name' => $this->file->getClientOriginalName(),
             'mime_type' => $this->file->getMimeType(),
             'size' => $this->file->getSize(),

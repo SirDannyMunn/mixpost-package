@@ -13,13 +13,24 @@ class StorePost extends PostFormRequest
     {
         return DB::transaction(function () {
             $record = Post::create([
+                'organization_id' => Post::getOrganizationIdForCreate(),
+                'created_by' => Post::getCurrentUserId(),
                 'status' => PostStatus::DRAFT,
                 'scheduled_at' => $this->scheduledAt() ? Util::convertTimeToUTC($this->scheduledAt()) : null
             ]);
 
             $record->accounts()->attach($this->input('accounts', []));
             $record->tags()->attach($this->input('tags'));
-            $record->versions()->createMany($this->input('versions'));
+            
+            // Ensure at least one version is marked as original
+            $versions = $this->input('versions', []);
+            $hasOriginal = collect($versions)->contains(fn($v) => !empty($v['is_original']));
+            
+            if (!$hasOriginal && count($versions) > 0) {
+                $versions[0]['is_original'] = true;
+            }
+            
+            $record->versions()->createMany($versions);
 
             return $record;
         });

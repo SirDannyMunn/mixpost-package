@@ -24,7 +24,7 @@ class AccountsApiController extends Controller
         $socialServices = ServiceManager::services()->group(ServiceGroup::SOCIAL)->getNames();
 
         return response()->json([
-            'accounts' => AccountResource::collection(Account::latest()->get())->resolve(),
+            'accounts' => AccountResource::collection(Account::forCurrentOrganization()->latest()->get())->resolve(),
             'is_configured_service' => ServiceManager::isConfigured($socialServices),
             'is_service_active' => ServiceManager::isActive($socialServices),
         ]);
@@ -35,7 +35,8 @@ class AccountsApiController extends Controller
      */
     public function update(Request $request, string $account): JsonResponse
     {
-        $accountModel = Account::firstOrFailByUuid($account);
+        $accountModel = Account::forCurrentOrganization()
+            ->firstOrFailByUuid($account);
 
         $connection = $this->connectProvider($accountModel);
 
@@ -55,7 +56,13 @@ class AccountsApiController extends Controller
             ], 400);
         }
 
-        (new UpdateOrCreateAccount())($accountModel->provider, $response->context(), $accountModel->access_token->toArray());
+        (new UpdateOrCreateAccount())(
+            $accountModel->provider,
+            $response->context(),
+            $accountModel->access_token->toArray(),
+            $accountModel->organization_id,
+            Account::getCurrentUserId()
+        );
 
         return response()->json([
             'message' => 'Account updated successfully',
@@ -68,7 +75,8 @@ class AccountsApiController extends Controller
      */
     public function destroy(Request $request, string $account): JsonResponse
     {
-        $accountModel = Account::firstOrFailByUuid($account);
+        $accountModel = Account::forCurrentOrganization()
+            ->firstOrFailByUuid($account);
 
         $connection = $this->connectProvider($accountModel);
 

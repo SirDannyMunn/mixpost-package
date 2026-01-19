@@ -5,10 +5,12 @@ namespace Inovector\Mixpost\Models;
 use Illuminate\Support\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Inovector\Mixpost\Concerns\Model\BelongsToOrganization;
 use Inovector\Mixpost\Concerns\Model\HasUuid;
 use Inovector\Mixpost\Enums\PostScheduleStatus;
 use Inovector\Mixpost\Enums\PostStatus;
@@ -17,11 +19,15 @@ use Inovector\Mixpost\Support\SocialProviderResponse;
 class Post extends Model
 {
     use HasFactory;
+    use HasUuids;
     use HasUuid;
+    use BelongsToOrganization;
 
     public $table = 'mixpost_posts';
 
     protected $fillable = [
+        'organization_id',
+        'created_by',
         'status',
         'scheduled_at',
         'published_at'
@@ -37,20 +43,21 @@ class Post extends Model
     protected function scheduledAt(): Attribute
     {
         return Attribute::make(
-            get: fn($value) => $this->attributes['scheduled_at'] ? Carbon::parse($this->attributes['scheduled_at'])->shiftTimezone('UTC') : null,
+            get: fn($value) => ($this->attributes['scheduled_at'] ?? null) ? Carbon::parse($this->attributes['scheduled_at'])->shiftTimezone('UTC') : null,
         );
     }
 
     protected function publishedAt(): Attribute
     {
         return Attribute::make(
-            get: fn($value) => $this->attributes['published_at'] ? Carbon::parse($this->attributes['published_at'])->shiftTimezone('UTC') : null,
+            get: fn($value) => ($this->attributes['published_at'] ?? null) ? Carbon::parse($this->attributes['published_at'])->shiftTimezone('UTC') : null,
         );
     }
 
     public function accounts(): BelongsToMany
     {
         return $this->belongsToMany(Account::class, 'mixpost_post_accounts', 'post_id', 'account_id')
+            ->using(PostAccount::class)
             ->withPivot(['errors', 'provider_post_id'])
             ->orderByPivot('id');
     }
@@ -62,8 +69,7 @@ class Post extends Model
 
     public function tags(): BelongsToMany
     {
-        return $this->belongsToMany(Tag::class, 'mixpost_tag_post', 'post_id', 'tag_id')
-            ->orderByPivot('id');
+        return $this->belongsToMany(Tag::class, 'mixpost_tag_post', 'post_id', 'tag_id');
     }
 
     public function scopeFailed(Builder $query): Builder
@@ -109,7 +115,7 @@ class Post extends Model
 
     public function isScheduleProcessing(): bool
     {
-        return $this->schedule_status->name === PostScheduleStatus::PROCESSING->name;
+        return $this->schedule_status?->name === PostScheduleStatus::PROCESSING->name;
     }
 
     public function setDraft(): void
@@ -159,13 +165,29 @@ class Post extends Model
             'provider_post_id' => $response->id,
             'data' => $response->data ? json_encode($response->data) : null,
             'errors' => null,
+            'api_response' => json_encode([
+                'status' => $response->status()->name,
+                'context' => $response->context(),
+                'timestamp' => now()->toIso8601String(),
+            ]),
         ]);
     }
 
-    public function insertErrors(Account $account, $errors): void
+    public function insertErrors(Account $account, $errors, ?SocialProviderResponse $response = null): void
     {
+        $apiResponse = null;
+        if ($response) {
+            $apiResponse = json_encode([
+                'status' => $response->status()->name,
+                'context' => $response->context(),
+                'error_message' => $response->errorMessage(),
+                'timestamp' => now()->toIso8601String(),
+            ]);
+        }
+        
         $this->accounts()->updateExistingPivot($account->id, [
-            'errors' => json_encode($errors)
+            'errors' => json_encode($errors),
+            'api_response' => $apiResponse,
         ]);
     }
 }

@@ -87,6 +87,7 @@ class ImportFacebookPageFollowersJob implements ShouldQueue
             'account_id' => $this->account->id,
             'date' => Carbon::today('UTC')->toDateString()
         ], [
+            'organization_id' => $this->account->organization_id,
             'total' => $response->context()['followers_count']
         ]);
     }

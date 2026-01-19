@@ -21,24 +21,38 @@ class PostContentParser
     {
         $accountVersion = $this->post->versions->where('account_id', $this->account->id)->first();
 
-        if (empty($accountVersion)) {
-            return $this->post->versions->where('is_original', true)->first()->content ?: [];
+        if (!empty($accountVersion)) {
+            return $accountVersion->content ?: [];
         }
 
-        return $accountVersion->content;
+        // Fall back to original version
+        $original = $this->post->versions->where('is_original', true)->first();
+        if (!empty($original)) {
+            return $original->content ?: [];
+        }
+
+        // Fall back to first available version
+        $firstVersion = $this->post->versions->first();
+        return $firstVersion?->content ?: [];
     }
 
     public function getVersionOptions(): array
     {
         $accountVersion = $this->post->versions->where('account_id', $this->account->id)->first();
 
-        if (empty($accountVersion)) {
-            $original = $this->post->versions->where('is_original', true)->first();
+        if (!empty($accountVersion)) {
+            return Arr::get($accountVersion->options ?? [], $this->account->provider, []);
+        }
 
+        // Fall back to original version
+        $original = $this->post->versions->where('is_original', true)->first();
+        if (!empty($original)) {
             return Arr::get($original->options ?? [], $this->account->provider, []);
         }
 
-        return Arr::get($accountVersion->options ?? [], $this->account->provider, []);
+        // Fall back to first available version
+        $firstVersion = $this->post->versions->first();
+        return Arr::get($firstVersion?->options ?? [], $this->account->provider, []);
     }
 
     public function formatBody(?string $text): string

@@ -20,6 +20,7 @@ class StoreTag extends FormRequest
     public function handle()
     {
         return Tag::create([
+            'organization_id' => Tag::getOrganizationIdForCreate(),
             'name' => $this->input('name'),
             'hex_color' => Str::after($this->input('hex_color'), '#'),
         ]);

@@ -17,7 +17,7 @@ class TagsApiController extends Controller
      */
     public function index(): JsonResponse
     {
-        $tags = Tag::latest()->get();
+        $tags = Tag::forCurrentOrganization()->latest()->get();
 
         return response()->json([
             'data' => TagResource::collection($tags)->resolve(),
@@ -55,7 +55,9 @@ class TagsApiController extends Controller
      */
     public function destroy(Request $request): JsonResponse
     {
-        $tag = Tag::where('uuid', $request->route('tag'))->first();
+        $tag = Tag::forCurrentOrganization()
+            ->where('uuid', $request->route('tag'))
+            ->first();
 
         if (!$tag) {
             return response()->json([

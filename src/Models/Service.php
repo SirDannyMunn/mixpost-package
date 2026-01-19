@@ -2,6 +2,7 @@
 
 namespace Inovector\Mixpost\Models;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Inovector\Mixpost\Casts\EncryptArrayObject;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -10,6 +11,7 @@ use Inovector\Mixpost\Facades\ServiceManager;
 class Service extends Model
 {
     use HasFactory;
+    use HasUuids;
 
     public $table = 'mixpost_services';
 

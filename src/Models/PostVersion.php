@@ -3,10 +3,13 @@
 namespace Inovector\Mixpost\Models;
 
 use Illuminate\Contracts\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 
 class PostVersion extends Model
 {
+    use HasUuids;
+
     public $table = 'mixpost_post_versions';
 
     public $timestamps = false;

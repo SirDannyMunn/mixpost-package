@@ -28,8 +28,8 @@ class CalendarApiController extends Controller
         EagerLoadPostVersionsMedia::apply($posts);
 
         return response()->json([
-            'accounts' => AccountResource::collection(Account::oldest()->get())->resolve(),
-            'tags' => TagResource::collection(Tag::latest()->get())->resolve(),
+            'accounts' => AccountResource::collection(Account::forCurrentOrganization()->oldest()->get())->resolve(),
+            'tags' => TagResource::collection(Tag::forCurrentOrganization()->latest()->get())->resolve(),
             'posts' => PostResource::collection($posts)->additional([
                 'filter' => [
                     'accounts' => Arr::map($request->get('accounts', []), 'intval'),
