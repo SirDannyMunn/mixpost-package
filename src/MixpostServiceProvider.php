@@ -111,7 +111,7 @@ class MixpostServiceProvider extends PackageServiceProvider
     protected function loadApiRoutes(): void
     {
         \Illuminate\Support\Facades\Route::middleware('api')
-            ->prefix('api')
+            ->prefix('api/v1')
             ->group(__DIR__ . '/../routes/api.php');
     }
 
