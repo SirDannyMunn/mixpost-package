@@ -27,25 +27,31 @@ trait ManagesOAuth
     public function requestAccessToken(array $params): array
     {
         try {
-            $response = Http::asForm()->post("{$this->apiUrl}/{$this->apiVersion}/oauth/token/", [
+            $requestData = [
                 'client_key' => $this->clientId,
                 'client_secret' => $this->clientSecret,
                 'code' => $params['code'],
                 'grant_type' => 'authorization_code',
                 'redirect_uri' => $this->redirectUrl
-            ])->throw()->json();
+            ];
+            
+            $response = Http::asForm()->post("{$this->apiUrl}/{$this->apiVersion}/oauth/token/", $requestData)->throw()->json();
 
-            if (isset($response['data']['access_token'])) {
+            // TikTok API v2 returns tokens directly (not wrapped in 'data')
+            // Handle both formats for compatibility
+            $tokenData = $response['data'] ?? $response;
+
+            if (isset($tokenData['access_token'])) {
                 return [
-                    'access_token' => $response['data']['access_token'],
-                    'refresh_token' => $response['data']['refresh_token'],
-                    'expires_in' => $response['data']['expires_in'],
-                    'open_id' => $response['data']['open_id']
+                    'access_token' => $tokenData['access_token'],
+                    'refresh_token' => $tokenData['refresh_token'],
+                    'expires_in' => $tokenData['expires_in'],
+                    'open_id' => $tokenData['open_id']
                 ];
             }
 
             return [
-                'error' => $response['data']['error_description'] ?? 'Unknown error'
+                'error' => $tokenData['error_description'] ?? $response['error']['message'] ?? 'Unknown error'
             ];
         } catch (RequestException $e) {
             return [
@@ -64,17 +70,20 @@ trait ManagesOAuth
                 'refresh_token' => $refreshToken
             ])->throw()->json();
 
-            if (isset($response['data']['access_token'])) {
+            // TikTok API v2 returns tokens directly (not wrapped in 'data')
+            $tokenData = $response['data'] ?? $response;
+
+            if (isset($tokenData['access_token'])) {
                 return [
-                    'access_token' => $response['data']['access_token'],
-                    'refresh_token' => $response['data']['refresh_token'],
-                    'expires_in' => $response['data']['expires_in'],
-                    'open_id' => $response['data']['open_id']
+                    'access_token' => $tokenData['access_token'],
+                    'refresh_token' => $tokenData['refresh_token'],
+                    'expires_in' => $tokenData['expires_in'],
+                    'open_id' => $tokenData['open_id']
                 ];
             }
 
             return [
-                'error' => $response['data']['error_description'] ?? 'Unknown error'
+                'error' => $tokenData['error_description'] ?? 'Unknown error'
             ];
         } catch (RequestException $e) {
             return [

@@ -192,15 +192,31 @@ class OAuthHandoffController extends Controller
             // use the entity's access token, otherwise use the user's access token
             $entityAccessToken = $entity['access_token'] ?? null;
             
+            // Check if this is a Facebook Page - needs special token handling
+            $isFacebookPage = in_array($data['provider'], ['facebook', 'facebook_page']);
+            
             if (is_array($entityAccessToken) && isset($entityAccessToken['access_token'])) {
                 // Entity has its own structured token (e.g., Facebook Page)
-                $tokenToStore = $entityAccessToken;
+                if ($isFacebookPage) {
+                    // Facebook Pages need both the user token and the page token
+                    $tokenToStore = array_merge($accessToken, [
+                        'page_access_token' => $entityAccessToken['access_token']
+                    ]);
+                } else {
+                    $tokenToStore = $entityAccessToken;
+                }
             } elseif (is_string($entityAccessToken)) {
                 // Entity has a string token - wrap it in the expected format
-                $tokenToStore = [
-                    'access_token' => $entityAccessToken,
-                    'token_type' => $accessToken['token_type'] ?? 'Bearer',
-                ];
+                if ($isFacebookPage) {
+                    $tokenToStore = array_merge($accessToken, [
+                        'page_access_token' => $entityAccessToken
+                    ]);
+                } else {
+                    $tokenToStore = [
+                        'access_token' => $entityAccessToken,
+                        'token_type' => $accessToken['token_type'] ?? 'Bearer',
+                    ];
+                }
             } else {
                 // Use the user's access token
                 $tokenToStore = $accessToken;

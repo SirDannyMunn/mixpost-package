@@ -10,7 +10,10 @@ class ExcludePostStatus implements Filter
 {
     public static function apply(Builder $builder, $value): Builder
     {
-        $status = match ($value) {
+        // Normalize to lowercase to support both 'SCHEDULED' and 'scheduled'
+        $normalizedValue = strtolower($value);
+        
+        $status = match ($normalizedValue) {
             'draft' => PostStatusEnum::DRAFT->value,
             'scheduled' => PostStatusEnum::SCHEDULED->value,
             'published' => PostStatusEnum::PUBLISHED->value,
