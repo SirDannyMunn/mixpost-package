@@ -20,10 +20,20 @@ class CallbackSocialProviderController extends Controller
         // State is the canonical transport for context - no session coupling
         $stateParam = $request->get('state');
         
+        Log::info('OAuth callback received', [
+            'provider' => $providerName,
+            'has_state' => !empty($stateParam),
+            'state_length' => strlen($stateParam ?? ''),
+            'state_preview' => substr($stateParam ?? '', 0, 50),
+            'all_params' => $request->all(),
+        ]);
+        
         if ($stateParam && $this->isEncryptedState($stateParam)) {
+            Log::info('Using stateful (SPA) callback flow');
             return $this->handleStatefulCallback($request, $providerName, $stateParam);
         }
         
+        Log::info('Using standard (admin) callback flow - state not encrypted or missing');
         // Otherwise, use the standard Mixpost flow (session-based, for admin panel)
         return $this->handleStandardCallback($request, $updateOrCreateAccount, $providerName);
     }
