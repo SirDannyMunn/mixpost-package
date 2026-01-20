@@ -5,6 +5,7 @@ namespace Inovector\Mixpost\SocialProviders\Pinterest\Concerns;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Inovector\Mixpost\Enums\SocialProviderResponseStatus;
 use Inovector\Mixpost\Support\SocialProviderResponse;
 
@@ -15,10 +16,20 @@ trait ManagesResources
         try {
             $accessToken = $this->getAccessToken();
 
+            Log::info('Pinterest getAccount request', [
+                'url' => "{$this->apiUrl}/{$this->apiVersion}/user_account",
+                'has_token' => isset($accessToken['access_token']),
+            ]);
+
             $response = Http::withToken($accessToken['access_token'])
                 ->get("{$this->apiUrl}/{$this->apiVersion}/user_account")
                 ->throw()
                 ->json();
+
+            Log::info('Pinterest getAccount response', [
+                'response_keys' => array_keys($response ?? []),
+                'username' => $response['username'] ?? 'not set',
+            ]);
 
             if (isset($response['username'])) {
                 return $this->response(SocialProviderResponseStatus::OK, [
@@ -29,8 +40,20 @@ trait ManagesResources
                 ]);
             }
 
+            Log::warning('Pinterest getAccount: no username in response', ['response' => $response]);
             return $this->response(SocialProviderResponseStatus::ERROR, null, 'Failed to retrieve account information');
         } catch (RequestException $e) {
+            Log::error('Pinterest getAccount exception', [
+                'error' => $e->getMessage(),
+                'response_body' => $e->response?->body(),
+                'status_code' => $e->response?->status(),
+            ]);
+            return $this->response(SocialProviderResponseStatus::ERROR, null, $e->getMessage());
+        } catch (\Exception $e) {
+            Log::error('Pinterest getAccount unexpected exception', [
+                'error' => $e->getMessage(),
+                'class' => get_class($e),
+            ]);
             return $this->response(SocialProviderResponseStatus::ERROR, null, $e->getMessage());
         }
     }

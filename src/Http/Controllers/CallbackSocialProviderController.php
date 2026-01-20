@@ -117,7 +117,19 @@ class CallbackSocialProviderController extends Controller
             }
 
             // Get access token
+            Log::info('Requesting access token', [
+                'provider' => $providerName,
+                'callback_response_keys' => array_keys($provider->getCallbackResponse()),
+            ]);
+            
             $accessToken = $provider->requestAccessToken($provider->getCallbackResponse());
+
+            Log::info('Access token response', [
+                'provider' => $providerName,
+                'has_access_token' => isset($accessToken['access_token']),
+                'has_error' => isset($accessToken['error']),
+                'error' => $accessToken['error'] ?? null,
+            ]);
 
             if ($error = Arr::get($accessToken, 'error')) {
                 return $this->redirectToFrontend($returnUrl, $client, [
@@ -130,7 +142,14 @@ class CallbackSocialProviderController extends Controller
             $provider->setAccessToken($accessToken);
 
             // Get account info
+            Log::info('Fetching account info', ['provider' => $providerName]);
             $account = $provider->getAccount();
+
+            Log::info('Account info result', [
+                'provider' => $providerName,
+                'has_error' => $account->hasError(),
+                'context_keys' => array_keys($account->context()),
+            ]);
 
             if ($account->hasError()) {
                 return $this->redirectToFrontend($returnUrl, $client, [
@@ -141,6 +160,12 @@ class CallbackSocialProviderController extends Controller
             }
 
             // Save the account to the database
+            Log::info('Saving account', [
+                'provider' => $providerName,
+                'org_id' => $organizationId,
+                'user_id' => $userId,
+            ]);
+            
             $socialAccount = $this->saveAccount(
                 $providerName,
                 $account->context(),

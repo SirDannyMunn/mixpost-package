@@ -67,7 +67,7 @@ class SocialProviderManager extends SocialProviderManagerAbstract
 
     protected function connectInstagramProvider()
     {
-        $config = ServiceManager::get('facebook', 'configuration');
+        $config = ServiceManager::get('instagram', 'configuration');
 
         $config['redirect'] = route('mixpost.callbackSocialProvider', ['provider' => 'instagram']);
 

@@ -17,7 +17,7 @@ trait ManagesOAuth
             'response_type' => 'code',
             'client_id' => $this->clientId,
             'redirect_uri' => $this->redirectUrl,
-            'scope' => 'boards:read,pins:read,pins:write',
+            'scope' => 'user_accounts:read,boards:read,pins:read,pins:write',
             'state' => $state
         ]);
 
