@@ -28,15 +28,31 @@ class ProcessTwitterMetricsJob implements ShouldQueue
 
     public function handle()
     {
-        $items = ImportedPost::select(
-            DB::raw('DATE(created_at) as date'),
-            DB::raw('SUM(JSON_EXTRACT(metrics, "$.likes")) as likes'),
-            DB::raw('SUM(JSON_EXTRACT(metrics, "$.replies")) as replies'),
-            DB::raw('SUM(JSON_EXTRACT(metrics, "$.retweets")) as retweets'),
-            DB::raw('SUM(JSON_EXTRACT(metrics, "$.impressions")) as impressions'))
-            ->where('account_id', $this->account->id)
-            ->groupBy('date')
-            ->cursor();
+        $driver = DB::connection()->getDriverName();
+
+        if ($driver === 'pgsql') {
+            // PostgreSQL: Use ->> for JSON text extraction and cast to numeric
+            $items = ImportedPost::select(
+                DB::raw('DATE(created_at) as date'),
+                DB::raw("SUM(COALESCE((metrics->>'likes')::numeric, 0)) as likes"),
+                DB::raw("SUM(COALESCE((metrics->>'replies')::numeric, 0)) as replies"),
+                DB::raw("SUM(COALESCE((metrics->>'retweets')::numeric, 0)) as retweets"),
+                DB::raw("SUM(COALESCE((metrics->>'impressions')::numeric, 0)) as impressions"))
+                ->where('account_id', $this->account->id)
+                ->groupBy('date')
+                ->cursor();
+        } else {
+            // MySQL: Use JSON_EXTRACT
+            $items = ImportedPost::select(
+                DB::raw('DATE(created_at) as date'),
+                DB::raw('SUM(JSON_EXTRACT(metrics, "$.likes")) as likes'),
+                DB::raw('SUM(JSON_EXTRACT(metrics, "$.replies")) as replies'),
+                DB::raw('SUM(JSON_EXTRACT(metrics, "$.retweets")) as retweets'),
+                DB::raw('SUM(JSON_EXTRACT(metrics, "$.impressions")) as impressions'))
+                ->where('account_id', $this->account->id)
+                ->groupBy('date')
+                ->cursor();
+        }
 
         $data = $items->map(function ($item) {
             return [
