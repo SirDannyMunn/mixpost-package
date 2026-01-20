@@ -8,15 +8,23 @@ use Inovector\Mixpost\Support\SocialProviderResponse;
 
 trait ManagesInstagramOAuth
 {
+    // Instagram has its own Graph API endpoint (not Facebook's)
+    protected string $instagramApiUrl = 'https://graph.instagram.com';
+    
     public function getAuthUrl(): string
     {
         // Use encrypted state from values if provided (cross-domain OAuth)
         // Falls back to csrf_token for standard Mixpost admin flows
         $state = $this->values['oauth_state'] ?? csrf_token();
         
-        // Instagram Basic Display API scopes
-        // For Instagram Business accounts, use Facebook OAuth with pages_show_list scope
-        $instagramScopes = 'instagram_business_basic,instagram_business_manage_messages';
+        // Instagram Business API scopes - all must use instagram_business_ prefix
+        $instagramScopes = implode(',', [
+            'instagram_business_basic',
+            'instagram_business_manage_messages',
+            'instagram_business_manage_comments',
+            'instagram_business_content_publish',
+            'instagram_business_manage_insights',
+        ]);
         
         $params = [
             'client_id' => $this->clientId,
@@ -45,8 +53,8 @@ trait ManagesInstagramOAuth
 
         $shortLivedToken = $response->json();
 
-        // Exchange short-lived token for long-lived token
-        $longLivedResponse = Http::get("$this->apiUrl/$this->apiVersion/access_token", [
+        // Exchange short-lived token for long-lived token using Instagram's Graph API
+        $longLivedResponse = Http::get("$this->instagramApiUrl/access_token", [
             'grant_type' => 'ig_exchange_token',
             'client_secret' => $this->clientSecret,
             'access_token' => $shortLivedToken['access_token']
@@ -66,7 +74,7 @@ trait ManagesInstagramOAuth
 
     public function refreshAccessToken(string $accessToken): array
     {
-        $response = Http::get("$this->apiUrl/$this->apiVersion/refresh_access_token", [
+        $response = Http::get("$this->instagramApiUrl/refresh_access_token", [
             'grant_type' => 'ig_refresh_token',
             'access_token' => $accessToken
         ]);
@@ -85,49 +93,84 @@ trait ManagesInstagramOAuth
 
     public function getEntities(bool $withAccessToken = false): SocialProviderResponse
     {
-        $response = Http::get("$this->apiUrl/$this->apiVersion/me/accounts", [
-            'fields' => 'id,name,instagram_business_account' . ($withAccessToken ? ',access_token' : ''),
-            'access_token' => $this->getAccessToken()['access_token'],
-            'limit' => 200
+        $tokenData = $this->getAccessToken();
+        $accessToken = $tokenData['access_token'] ?? null;
+        
+        \Illuminate\Support\Facades\Log::info('Instagram getEntities called', [
+            'has_access_token' => !empty($accessToken),
+            'token_data_keys' => array_keys($tokenData ?? []),
+            'api_url' => $this->instagramApiUrl,
         ]);
+        
+        if (empty($accessToken)) {
+            \Illuminate\Support\Facades\Log::error('Instagram getEntities: No access token available');
+            return $this->response(
+                \Inovector\Mixpost\Enums\SocialProviderResponseStatus::ERROR,
+                [],
+                'No access token available'
+            );
+        }
+        
+        // For Instagram Business API, we need to get the user's Instagram accounts
+        // First, get the user info
+        $meResponse = Http::get("$this->instagramApiUrl/me", [
+            'fields' => 'user_id,username,account_type,profile_picture_url',
+            'access_token' => $accessToken
+        ]);
+        
+        \Illuminate\Support\Facades\Log::info('Instagram /me response', [
+            'status' => $meResponse->status(),
+            'body' => $meResponse->json(),
+        ]);
+        
+        if ($meResponse->failed()) {
+            return $this->response(
+                \Inovector\Mixpost\Enums\SocialProviderResponseStatus::ERROR,
+                [],
+                $meResponse->json('error.message') ?? 'Failed to fetch Instagram user'
+            );
+        }
+        
+        $userData = $meResponse->json();
+        
+        // Instagram API returns the user directly - wrap as entity
+        $accounts = [];
+        
+        if (isset($userData['user_id'])) {
+            $account = [
+                'id' => $userData['user_id'],
+                'name' => $userData['username'] ?? 'Instagram Account',
+                'username' => $userData['username'] ?? '',
+                'image' => $userData['profile_picture_url'] ?? '',
+            ];
 
-        return $this->buildResponse($response, function () use ($response, $withAccessToken) {
-            $accounts = collect();
-
-            foreach ($response->json('data', []) as $page) {
-                if (!isset($page['instagram_business_account']['id'])) {
-                    continue;
-                }
-
-                $igAccountId = $page['instagram_business_account']['id'];
-
-                // Get Instagram account details
-                $igResponse = Http::get("$this->apiUrl/$this->apiVersion/$igAccountId", [
-                    'fields' => 'id,username,profile_picture_url',
-                    'access_token' => $this->getAccessToken()['access_token']
-                ]);
-
-                if ($igResponse->successful()) {
-                    $igData = $igResponse->json();
-
-                    $account = [
-                        'id' => $igData['id'],
-                        'name' => $igData['username'],
-                        'username' => $igData['username'],
-                        'image' => $igData['profile_picture_url'] ?? '',
-                    ];
-
-                    if ($withAccessToken) {
-                        $account['access_token'] = [
-                            'access_token' => $this->getAccessToken()['access_token']
-                        ];
-                    }
-
-                    $accounts->push($account);
-                }
+            if ($withAccessToken) {
+                $account['access_token'] = [
+                    'access_token' => $accessToken
+                ];
             }
 
-            return $accounts->toArray();
-        });
+            $accounts[] = $account;
+        }
+        
+        \Illuminate\Support\Facades\Log::info('Instagram entities result', [
+            'count' => count($accounts),
+            'accounts' => $accounts,
+            'user_data_keys' => array_keys($userData ?? []),
+        ]);
+
+        // If no accounts found, it might be an issue with the response format
+        if (empty($accounts)) {
+            return $this->response(
+                \Inovector\Mixpost\Enums\SocialProviderResponseStatus::ERROR,
+                [],
+                'No Instagram accounts found. user_id may not be in response. Keys: ' . implode(', ', array_keys($userData ?? []))
+            );
+        }
+
+        return $this->response(
+            \Inovector\Mixpost\Enums\SocialProviderResponseStatus::OK,
+            $accounts
+        );
     }
 }

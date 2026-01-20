@@ -73,46 +73,87 @@ class OAuthHandoffController extends Controller
             ], 400);
         }
 
-        // Get the provider and fetch available entities
-        $provider = SocialProviderManager::connect($data['provider']);
-        
-        // Check if we already have an access token (from a previous getEntities call)
-        $accessToken = $data['access_token'] ?? null;
-        
-        if (!$accessToken) {
-            // First call - exchange the auth code for an access token
-            $accessToken = $provider->requestAccessToken($data['callback_response']);
+        try {
+            // Get the provider and fetch available entities
+            $provider = SocialProviderManager::connect($data['provider']);
             
-            if (isset($accessToken['error'])) {
+            // Check if we already have an access token (from a previous getEntities call)
+            $accessToken = $data['access_token'] ?? null;
+            
+            \Illuminate\Support\Facades\Log::info('OAuthHandoff (package): Before token exchange', [
+                'provider' => $data['provider'],
+                'has_access_token' => !empty($accessToken),
+                'callback_response_keys' => array_keys($data['callback_response'] ?? []),
+            ]);
+            
+            if (!$accessToken) {
+                // First call - exchange the auth code for an access token
+                $accessToken = $provider->requestAccessToken($data['callback_response']);
+                
+                \Illuminate\Support\Facades\Log::info('OAuthHandoff (package): Token exchange result', [
+                    'provider' => $data['provider'],
+                    'has_error' => isset($accessToken['error']),
+                    'error' => $accessToken['error'] ?? null,
+                    'has_access_token' => isset($accessToken['access_token']),
+                ]);
+                
+                if (isset($accessToken['error'])) {
+                    return response()->json([
+                        'error' => 'token_error',
+                        'error_description' => $accessToken['error'],
+                    ], 400);
+                }
+                
+                // Store the access token in cache for the selectEntity call
+                $data['access_token'] = $accessToken;
+                Cache::put($cacheKey, $data, now()->addMinutes(10));
+            }
+
+            // Use stateless method for API context (no session available)
+            $provider->setAccessTokenStateless($accessToken);
+            
+            // Get available entities (pages, accounts, etc.)
+            $entitiesResponse = $provider->getEntities(withAccessToken: true);
+            
+            \Illuminate\Support\Facades\Log::info('OAuthHandoff (package): Entities response', [
+                'provider' => $data['provider'],
+                'has_error' => $entitiesResponse->hasError(),
+                'context_count' => count($entitiesResponse->context() ?? []),
+            ]);
+            
+            if ($entitiesResponse->hasError()) {
                 return response()->json([
-                    'error' => 'token_error',
-                    'error_description' => $accessToken['error'],
+                    'error' => 'entities_fetch_failed',
+                    'error_description' => 'Failed to fetch available pages/accounts',
+                    'debug' => [
+                        'provider' => $data['provider'],
+                        'status' => $entitiesResponse->status()->value ?? 'unknown',
+                        'message' => $entitiesResponse->errorMessage() ?? 'No error message',
+                        'context' => $entitiesResponse->context(),
+                    ],
                 ], 400);
             }
-            
-            // Store the access token in cache for the selectEntity call
-            $data['access_token'] = $accessToken;
-            Cache::put($cacheKey, $data, now()->addMinutes(10));
-        }
 
-        // Use stateless method for API context (no session available)
-        $provider->setAccessTokenStateless($accessToken);
-        
-        // Get available entities (pages, accounts, etc.)
-        $entitiesResponse = $provider->getEntities(withAccessToken: true);
-        
-        if ($entitiesResponse->hasError()) {
+            return response()->json([
+                'platform' => $data['provider'],
+                'entities' => $entitiesResponse->context(),
+                'entity_token' => $token, // Client needs to send this back when selecting
+            ]);
+            
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('OAuthHandoff (package): Exception', [
+                'provider' => $data['provider'] ?? 'unknown',
+                'error' => $e->getMessage(),
+            ]);
+            
             return response()->json([
                 'error' => 'entities_fetch_failed',
                 'error_description' => 'Failed to fetch available pages/accounts',
+                'debug' => [
+                    'exception' => $e->getMessage(),
+                ],
             ], 400);
         }
-
-        return response()->json([
-            'platform' => $data['provider'],
-            'entities' => $entitiesResponse->context(),
-            'entity_token' => $token, // Client needs to send this back when selecting
-        ]);
     }
 
     /**
