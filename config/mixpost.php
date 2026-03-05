@@ -71,6 +71,19 @@ return [
     'log_channel' => env('MIXPOST_LOG_CHANNEL'),
 
     /*
+     * Scheduler toggles for Mixpost commands.
+     */
+    'schedule' => [
+        'run_scheduled_posts_enabled' => env('MIXPOST_SCHEDULE_RUN_SCHEDULED_POSTS_ENABLED', true),
+        'refresh_access_tokens_enabled' => env('MIXPOST_SCHEDULE_REFRESH_ACCESS_TOKENS_ENABLED', true),
+        'import_account_data_enabled' => env('MIXPOST_SCHEDULE_IMPORT_ACCOUNT_DATA_ENABLED', true),
+        'import_account_audience_enabled' => env('MIXPOST_SCHEDULE_IMPORT_ACCOUNT_AUDIENCE_ENABLED', true),
+        'process_metrics_enabled' => env('MIXPOST_SCHEDULE_PROCESS_METRICS_ENABLED', true),
+        'delete_old_data_enabled' => env('MIXPOST_SCHEDULE_DELETE_OLD_DATA_ENABLED', true),
+        'prune_temporary_directory_enabled' => env('MIXPOST_SCHEDULE_PRUNE_TEMPORARY_DIRECTORY_ENABLED', true),
+    ],
+
+    /*
      * The media component is integrated with third-party services Unsplash.com and Tenor.com
      * Defines the default terms for displaying media resources
      */
