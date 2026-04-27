@@ -38,9 +38,11 @@ class PostVersionResource extends JsonResource
         $items = $this->content_with_relations ?? $this->content;
 
         return collect($items)->map(function ($item) {
+            $mediaItems = Arr::get($item, 'media', []);
+
             $data = [
                 'body' => (string)$item['body'],
-                'media' => Arr::map($item['media'], function ($mediaItem) {
+                'media' => Arr::map($mediaItems, function ($mediaItem) {
                     if ($mediaItem instanceof Media) {
                         return new MediaResource($mediaItem);
                     }

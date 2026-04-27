@@ -2,12 +2,14 @@
 
 namespace Inovector\Mixpost\Models;
 
+use App\Models\GenerationSnapshot;
 use Illuminate\Support\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Inovector\Mixpost\Concerns\Model\BelongsToOrganization;
@@ -30,7 +32,8 @@ class Post extends Model
         'created_by',
         'status',
         'scheduled_at',
-        'published_at'
+        'published_at',
+        'generation_snapshot_id',
     ];
 
     protected $casts = [
@@ -65,6 +68,11 @@ class Post extends Model
     public function versions(): HasMany
     {
         return $this->hasMany(PostVersion::class, 'post_id', 'id');
+    }
+
+    public function generationSnapshot(): BelongsTo
+    {
+        return $this->belongsTo(GenerationSnapshot::class, 'generation_snapshot_id', 'id');
     }
 
     public function tags(): BelongsToMany

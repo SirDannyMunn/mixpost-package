@@ -15,6 +15,7 @@ class PostResource extends JsonResource
         return [
             'id' => $this->uuid,
             'status' => $this->status(),
+            'has_generation_provenance' => !empty($this->generation_snapshot_id),
             'accounts' => AccountResource::collection($this->whenLoaded('accounts')),
             'versions' => PostVersionResource::collection($this->whenLoaded('versions')),
             'tags' => TagResource::collection($this->whenLoaded('tags')),

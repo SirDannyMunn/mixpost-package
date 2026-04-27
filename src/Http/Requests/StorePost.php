@@ -16,7 +16,8 @@ class StorePost extends PostFormRequest
                 'organization_id' => Post::getOrganizationIdForCreate(),
                 'created_by' => Post::getCurrentUserId(),
                 'status' => PostStatus::DRAFT,
-                'scheduled_at' => $this->scheduledAt() ? Util::convertTimeToUTC($this->scheduledAt()) : null
+                'scheduled_at' => $this->scheduledAt() ? Util::convertTimeToUTC($this->scheduledAt()) : null,
+                'generation_snapshot_id' => $this->input('generation_snapshot_id'),
             ]);
 
             $record->accounts()->attach($this->input('accounts', []));

@@ -2,6 +2,7 @@
 
 namespace Inovector\Mixpost\Http\Controllers\Api;
 
+use App\Services\Ai\GenerationProvenancePresenter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -85,19 +86,33 @@ class PostsApiController extends Controller
     /**
      * Get a single post for editing.
      */
-    public function show(Request $request, string $post): JsonResponse
+    public function show(
+        Request $request,
+        string $post,
+        GenerationProvenancePresenter $generationProvenancePresenter,
+    ): JsonResponse
     {
         $postModel = Post::forCurrentOrganization()
-            ->firstOrFailTrashedByUuid($post);
+            ->where('uuid', $post)
+            ->firstOrFail();
 
         $postModel->load('accounts', 'versions', 'tags');
 
         EagerLoadPostVersionsMedia::apply($postModel);
 
+        $includeProvenance = $request->boolean('include_provenance')
+            || $request->query('include') === 'provenance';
+
         return response()->json([
             'accounts' => AccountResource::collection(Account::forCurrentOrganization()->oldest()->get())->resolve(),
             'tags' => TagResource::collection(Tag::forCurrentOrganization()->latest()->get())->resolve(),
             'post' => new PostResource($postModel),
+            'generation_provenance' => $includeProvenance
+                ? $generationProvenancePresenter->presentForOrganization(
+                    $postModel->generation_snapshot_id,
+                    (string) $postModel->organization_id,
+                )
+                : null,
             'is_configured_service' => ServiceManager::isActive(),
             'service_configs' => ServiceManager::exposedConfiguration(),
         ]);
