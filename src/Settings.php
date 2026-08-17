@@ -47,7 +47,7 @@ class Settings
     public function get(string $name)
     {
         return $this->getFromCache($name, function () use ($name) {
-            $dbRecord = Setting::where('name', $name)->first();
+            $dbRecord = Setting::forCurrentOrganization()->where('name', $name)->first();
 
             $defaultPayload = $dbRecord ? $dbRecord->payload : $this->form()[$name];
 
@@ -83,6 +83,8 @@ class Settings
 
     private function resolveCacheKey(string $key): string
     {
-        return $this->config->get('mixpost.cache_prefix') . ".settings.$key";
+        $organizationId = Setting::resolveOrganizationId() ?? 'global';
+
+        return $this->config->get('mixpost.cache_prefix') . ".settings.$organizationId.$key";
     }
 }

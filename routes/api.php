@@ -63,7 +63,7 @@ Route::prefix('social')->name('social.api.')->group(function () {
 });
 
 
-Route::middleware('auth:sanctum')
+Route::middleware(['auth:sanctum', 'organization'])
     ->prefix('social')
     ->name('social.')
     ->group(function () {
@@ -159,4 +159,3 @@ Route::middleware(['web'])
     ->group(function () {
         Route::get('callback/{provider}', CallbackSocialProviderController::class)->name('callbackSocialProvider');
     });
-

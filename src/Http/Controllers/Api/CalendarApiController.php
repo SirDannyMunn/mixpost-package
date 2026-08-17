@@ -32,7 +32,7 @@ class CalendarApiController extends Controller
             'tags' => TagResource::collection(Tag::forCurrentOrganization()->latest()->get())->resolve(),
             'posts' => PostResource::collection($posts)->additional([
                 'filter' => [
-                    'accounts' => Arr::map($request->get('accounts', []), 'intval'),
+                    'accounts' => Arr::map($request->get('accounts', []), 'strval'),
                 ],
             ]),
             'type' => $request->type(),

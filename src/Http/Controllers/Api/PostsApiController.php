@@ -47,7 +47,7 @@ class PostsApiController extends Controller
             ],
             'posts' => PostResource::collection($posts)->additional([
                 'filter' => [
-                    'accounts' => Arr::map($request->query('accounts', []), 'intval')
+                    'accounts' => Arr::map($request->query('accounts', []), 'strval')
                 ]
             ]),
             'has_failed_posts' => Post::forCurrentOrganization()->failed()->exists()
