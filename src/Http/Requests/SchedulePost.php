@@ -44,7 +44,18 @@ class SchedulePost extends FormRequest
 
     public function handle(): void
     {
-        $this->post->setScheduled($this->getDateTime());
+        \Illuminate\Support\Facades\DB::transaction(function () {
+            $this->post = Post::forCurrentOrganization()->whereKey($this->post->id)->lockForUpdate()->firstOrFail();
+            if ($this->post->isInHistory() || $this->post->isScheduleProcessing()) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['post' => 'This post can no longer be scheduled.']);
+            }
+            $instant = $this->getDateTime();
+            if (!$instant || $instant->isPast() && !$this->input('postNow') || !$this->post->accounts()->exists()) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['post' => 'Choose a connected account and a future time.']);
+            }
+            app(\Inovector\Mixpost\Support\PostScheduleGuard::class)->assertAvailable($this->post, $instant, $this->post->accounts()->pluck('mixpost_accounts.id')->all());
+            $this->post->setScheduled($instant);
+        });
     }
 
     public function getDateTime(): Carbon|\Carbon\Carbon

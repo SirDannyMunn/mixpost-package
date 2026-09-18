@@ -25,8 +25,14 @@ class PostResource extends JsonResource
                 'human' => $this->scheduled_at ? Util::dateTimeFormat($this->scheduled_at, Settings::get('timezone')) : null,
             ],
             'published_at' => [
+                'iso' => $this->published_at?->toISOString(),
                 'human' => $this->published_at?->tz(Settings::get('timezone'))->format("D, M j, " . Util::timeFormat())
-            ]
+            ],
+            'publications' => $this->whenLoaded('accounts', fn () => $this->accounts->filter(fn ($account) => !empty($account->pivot->provider_post_id))->map(fn ($account) => [
+                'account_id' => (string) $account->id,
+                'provider' => $account->provider,
+                'provider_post_id' => (string) $account->pivot->provider_post_id,
+            ])->values()),
         ];
     }
 
