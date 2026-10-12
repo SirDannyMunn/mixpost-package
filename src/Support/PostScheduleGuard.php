@@ -13,8 +13,8 @@ final class PostScheduleGuard
     public function assertAvailable(Post $post, mixed $instant, array $accountIds): void
     {
         if (!$instant || !$accountIds) return;
-        Account::forCurrentOrganization()->whereIn('id', $accountIds)->orderBy('id')->lockForUpdate()->get();
-        $conflict = Post::forCurrentOrganization()
+        Account::forOrganization($post->organization_id)->whereIn('id', $accountIds)->orderBy('id')->lockForUpdate()->get();
+        $conflict = Post::forOrganization($post->organization_id)
             ->where('id', '!=', $post->id)
             ->where('status', PostStatus::SCHEDULED->value)
             ->where('scheduled_at', $instant)

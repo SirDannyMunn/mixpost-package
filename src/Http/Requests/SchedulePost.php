@@ -50,6 +50,13 @@ class SchedulePost extends FormRequest
                 throw \Illuminate\Validation\ValidationException::withMessages(['post' => 'This post can no longer be scheduled.']);
             }
             $instant = $this->getDateTime();
+            foreach ($this->post->accounts as $account) {
+                if ($account->provider !== 'tiktok') continue;
+                $parser = new \Inovector\Mixpost\Support\PostContentParser($account, $this->post);
+                if ($error = \Inovector\Mixpost\Support\TikTokPostOptions::error($parser->getVersionOptions())) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['tiktok' => $error]);
+                }
+            }
             if (!$instant || $instant->isPast() && !$this->input('postNow') || !$this->post->accounts()->exists()) {
                 throw \Illuminate\Validation\ValidationException::withMessages(['post' => 'Choose a connected account and a future time.']);
             }

@@ -8,7 +8,7 @@ class PostFormRequest extends FormRequest
 {
     public function rules(): array
     {
-        return [
+        return \Inovector\Mixpost\Support\TikTokPostOptions::rules() + [
             'accounts' => ['array'],
             'accounts.*' => ['nullable', 'uuid'],
             'tags' => ['array'],

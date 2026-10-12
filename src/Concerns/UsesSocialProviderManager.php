@@ -10,6 +10,9 @@ trait UsesSocialProviderManager
 {
     public function connectProvider(Account $account): SocialProvider
     {
+        if (!empty($account->data['integration'])) {
+            return app(\Inovector\Mixpost\Services\Integrations\SharedSocialConnection::class)->connect($account);
+        }
         return SocialProviderManager::connect($account->provider, $account->values())
             ->useAccessToken($account->access_token->toArray());
     }

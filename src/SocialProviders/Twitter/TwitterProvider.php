@@ -47,6 +47,7 @@ class TwitterProvider extends SocialProvider
 
     public function getTier(): string
     {
+        if (!empty($this->values['data']['integration'])) return 'basic';
         return self::service()::getConfiguration('tier');
     }
 

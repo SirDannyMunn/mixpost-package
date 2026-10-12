@@ -10,6 +10,25 @@ use Inovector\Mixpost\Support\SocialProviderResponse;
 
 trait ManagesResources
 {
+    public function creatorInfo(): SocialProviderResponse
+    {
+        try {
+            $token = $this->getAccessToken();
+            $result = Http::withToken($token['access_token'])->withBody('{}', 'application/json')
+                ->post("{$this->apiUrl}/{$this->apiVersion}/post/publish/creator_info/query/")
+                ->throw()->json();
+            if (($result['error']['code'] ?? '') !== 'ok' || empty($result['data'])) {
+                return $this->response(SocialProviderResponseStatus::ERROR, null, 'TikTok publishing is unavailable for this account.');
+            }
+            return $this->response(SocialProviderResponseStatus::OK, \Illuminate\Support\Arr::only($result['data'], [
+                'creator_avatar_url', 'creator_username', 'creator_nickname', 'privacy_level_options',
+                'comment_disabled', 'duet_disabled', 'stitch_disabled', 'max_video_post_duration_sec',
+            ]));
+        } catch (RequestException $e) {
+            return $this->response(SocialProviderResponseStatus::ERROR, null, 'Unable to retrieve TikTok publishing settings.');
+        }
+    }
+
     public function getAccount(): SocialProviderResponse
     {
         try {
@@ -41,165 +60,85 @@ trait ManagesResources
 
     public function publishPost(string $text, Collection $media, array $params = []): SocialProviderResponse
     {
-        try {
-            $accessToken = $this->getAccessToken();
-
-            // TikTok requires video or slideshow media
-            if ($media->isEmpty()) {
-                return $this->response(SocialProviderResponseStatus::ERROR, null, 'TikTok requires at least one video or image for posting');
-            }
-
-            $firstMedia = $media->first();
-
-            // Handle video upload
-            if ($firstMedia->isVideo()) {
-                return $this->publishVideo($text, $firstMedia, $accessToken);
-            }
-
-            // Handle slideshow (photo mode) - multiple images
-            if ($firstMedia->isImage()) {
-                return $this->publishPhotoSlideshow($text, $media, $accessToken);
-            }
-
-            return $this->response(SocialProviderResponseStatus::ERROR, null, 'Unsupported media type for TikTok');
-        } catch (RequestException $e) {
-            return $this->response(SocialProviderResponseStatus::ERROR, null, $e->getMessage());
+        if ($error = \Inovector\Mixpost\Support\TikTokPostOptions::error($params)) {
+            return $this->response(SocialProviderResponseStatus::ERROR, null, $error);
         }
-    }
-
-    protected function publishVideo(string $text, $media, array $accessToken): SocialProviderResponse
-    {
+        if ($media->count() !== 1 || !$media->first()?->isVideo() || $media->first()->disk === 'external_media') {
+            return $this->response(SocialProviderResponseStatus::ERROR, null, 'Select one uploaded video for TikTok.');
+        }
+        $creatorResponse = $this->creatorInfo();
+        if ($creatorResponse->hasError()) return $creatorResponse;
+        $creator = $creatorResponse->context();
+        $direct = $params['mode'] === 'direct';
+        if ($direct && !in_array($params['privacy_level'], $creator['privacy_level_options'] ?? [], true)) {
+            return $this->response(SocialProviderResponseStatus::ERROR, null, 'TikTok privacy settings changed. Reopen the composer and choose privacy again.');
+        }
+        $item = $media->first();
+        $temporary = null;
         try {
-            // Step 1: Initialize video upload
-            $initResponse = Http::withToken($accessToken['access_token'])
-                ->post("{$this->apiUrl}/{$this->apiVersion}/post/publish/video/init/", [
-                    'post_info' => [
-                        'title' => $text ?: 'Video Post',
-                        'privacy_level' => 'SELF_ONLY',
-                        'disable_duet' => false,
-                        'disable_comment' => false,
-                        'disable_stitch' => false,
-                        'video_cover_timestamp_ms' => 1000
-                    ],
-                    'source_info' => [
-                        'source' => 'FILE_UPLOAD',
-                        'video_size' => $media->size,
-                        'chunk_size' => 10000000,
-                        'total_chunk_count' => 1
-                    ]
-                ])
-                ->throw()
-                ->json();
-
-            if (!isset($initResponse['data']['publish_id']) || !isset($initResponse['data']['upload_url'])) {
-                return $this->response(SocialProviderResponseStatus::ERROR, null, 'Failed to initialize video upload');
+            if ($item->isLocalAdapter()) {
+                $path = $item->getFullPath();
+            } else {
+                $download = $item->downloadToTemp();
+                $temporary = $download['temporaryDirectory'];
+                $path = $download['fullPath'];
             }
-
-            $publishId = $initResponse['data']['publish_id'];
-            $uploadUrl = $initResponse['data']['upload_url'];
-
-            // Step 2: Upload video file
-            $videoPath = $media->isLocalAdapter() ? $media->getFullPath() : $media->getUrl();
-            
-            $uploadResponse = Http::withHeaders([
-                'Content-Type' => $media->mime_type,
-                'Content-Range' => 'bytes 0-' . ($media->size - 1) . '/' . $media->size
-            ])->put($uploadUrl, file_get_contents($videoPath));
-
-            if (!$uploadResponse->successful()) {
-                return $this->response(SocialProviderResponseStatus::ERROR, null, 'Failed to upload video file');
+            $duration = (float) \FFMpeg\FFProbe::create(['ffprobe.binaries' => config('mixpost.ffprobe_path')])->format($path)->get('duration');
+            $limit = $direct ? (int) ($creator['max_video_post_duration_sec'] ?? 0) : 600;
+            if ($duration <= 0 || $duration > $limit) {
+                return $this->response(SocialProviderResponseStatus::ERROR, null, "Video must be no longer than {$limit} seconds.");
             }
-
-            // Step 3: Publish the video
-            $publishResponse = Http::withToken($accessToken['access_token'])
-                ->post("{$this->apiUrl}/{$this->apiVersion}/post/publish/status/fetch/", [
-                    'publish_id' => $publishId
-                ])
-                ->throw()
-                ->json();
-
-            // Return immediately with publish_id, actual publishing happens async on TikTok side
+        } catch (\Throwable $e) {
+            return $this->response(SocialProviderResponseStatus::ERROR, null, 'Unable to verify video duration. Check the uploaded video and media processing service.');
+        } finally {
+            $temporary?->delete();
+        }
+        try {
+            $payload = ['source_info' => [
+                'source' => 'PULL_FROM_URL',
+                'video_url' => \Illuminate\Support\Facades\URL::temporarySignedRoute('social.api.tiktok-media', now()->addHours(2), ['media' => $item->id]),
+            ]];
+            if ($direct) {
+                $payload['post_info'] = [
+                    'title' => $text,
+                    'privacy_level' => $params['privacy_level'],
+                    'disable_comment' => !empty($creator['comment_disabled']) || empty($params['allow_comment']),
+                    'disable_duet' => !empty($creator['duet_disabled']) || empty($params['allow_duet']),
+                    'disable_stitch' => !empty($creator['stitch_disabled']) || empty($params['allow_stitch']),
+                    'brand_organic_toggle' => !empty($params['commercial_content']) && !empty($params['brand_organic']),
+                    'brand_content_toggle' => !empty($params['commercial_content']) && !empty($params['brand_content']),
+                ];
+            }
+            $endpoint = $direct ? 'video/init/' : 'inbox/video/init/';
+            $result = Http::withToken($this->getAccessToken()['access_token'])->timeout(30)
+                ->post("{$this->apiUrl}/{$this->apiVersion}/post/publish/{$endpoint}", $payload)->json();
+            if (($result['error']['code'] ?? '') !== 'ok' || empty($result['data']['publish_id'])) {
+                $code = preg_replace('/[^a-zA-Z0-9_]/', '', (string) ($result['error']['code'] ?? 'request_failed'));
+                return $this->response(SocialProviderResponseStatus::ERROR, null, "TikTok did not accept this video: {$code}.");
+            }
             return $this->response(SocialProviderResponseStatus::OK, [
-                'id' => $publishId
+                'id' => $result['data']['publish_id'],
+                'data' => ['delivery_status' => 'PROCESSING_DOWNLOAD', 'delivery_mode' => $params['mode']],
             ]);
-        } catch (RequestException $e) {
-            return $this->response(SocialProviderResponseStatus::ERROR, null, $e->getMessage());
+        } catch (\Throwable $e) {
+            // A timeout may occur after TikTok accepted the request: never automatically repost.
+            return $this->response(SocialProviderResponseStatus::ERROR, null, 'TikTok submission could not be confirmed. Check TikTok before creating another post.');
         }
     }
 
-    protected function publishPhotoSlideshow(string $text, Collection $media, array $accessToken): SocialProviderResponse
+    public function publishStatus(string $publishId): SocialProviderResponse
     {
         try {
-            $images = [];
-
-            // Upload each image
-            foreach ($media as $item) {
-                if (!$item->isImage()) {
-                    continue;
-                }
-
-                // Step 1: Initialize image upload
-                $initResponse = Http::withToken($accessToken['access_token'])
-                    ->post("{$this->apiUrl}/{$this->apiVersion}/post/publish/inbox/video/init/", [
-                        'source_info' => [
-                            'source' => 'FILE_UPLOAD'
-                        ]
-                    ])
-                    ->throw()
-                    ->json();
-
-                if (!isset($initResponse['data']['upload_url'])) {
-                    continue;
-                }
-
-                $uploadUrl = $initResponse['data']['upload_url'];
-
-                // Step 2: Upload image
-                $imagePath = $item->isLocalAdapter() ? $item->getFullPath() : $item->getUrl();
-                
-                $uploadResponse = Http::withHeaders([
-                    'Content-Type' => $item->mime_type
-                ])->put($uploadUrl, file_get_contents($imagePath));
-
-                if ($uploadResponse->successful() && isset($initResponse['data']['photo_id'])) {
-                    $images[] = ['photo_id' => $initResponse['data']['photo_id']];
-                }
+            $result = Http::withToken($this->getAccessToken()['access_token'])->timeout(30)
+                ->post("{$this->apiUrl}/{$this->apiVersion}/post/publish/status/fetch/", ['publish_id' => $publishId])->throw()->json();
+            if (($result['error']['code'] ?? '') !== 'ok' || empty($result['data']['status'])) {
+                return $this->response(SocialProviderResponseStatus::ERROR, null, 'TikTok status is temporarily unavailable.');
             }
-
-            if (empty($images)) {
-                return $this->response(SocialProviderResponseStatus::ERROR, null, 'Failed to upload images');
-            }
-
-            // Step 3: Create photo post
-            $publishResponse = Http::withToken($accessToken['access_token'])
-                ->post("{$this->apiUrl}/{$this->apiVersion}/post/publish/content/init/", [
-                    'post_info' => [
-                        'title' => $text ?: 'Photo Post',
-                        'privacy_level' => 'SELF_ONLY',
-                        'disable_duet' => false,
-                        'disable_comment' => false,
-                        'disable_stitch' => false
-                    ],
-                    'source_info' => [
-                        'source' => 'PHOTO_MODE',
-                        'photo_images' => $images
-                    ]
-                ])
-                ->throw()
-                ->json();
-
-            if (isset($publishResponse['data']['publish_id'])) {
-                return $this->response(SocialProviderResponseStatus::OK, [
-                    'id' => $publishResponse['data']['publish_id']
-                ]);
-            }
-
-            return $this->response(SocialProviderResponseStatus::ERROR, null, 'Failed to publish slideshow');
-        } catch (RequestException $e) {
-            return $this->response(SocialProviderResponseStatus::ERROR, null, $e->getMessage());
+            return $this->response(SocialProviderResponseStatus::OK, \Illuminate\Support\Arr::only($result['data'], ['status', 'fail_reason', 'publicaly_available_post_id']));
+        } catch (\Throwable $e) {
+            return $this->response(SocialProviderResponseStatus::ERROR, null, 'TikTok status is temporarily unavailable.');
         }
     }
-
     public function deletePost($id): SocialProviderResponse
     {
         return $this->response(SocialProviderResponseStatus::OK, []);

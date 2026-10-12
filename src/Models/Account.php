@@ -120,6 +120,9 @@ class Account extends Model
 
     public function isServiceActive(): bool
     {
+        if (!empty($this->data['integration'])) {
+            return $this->getProviderClass() !== null;
+        }
         if (!$this->getProviderClass()) {
             return false;
         }

@@ -20,6 +20,8 @@
         }
     ],
     "require": {
+        "laundryos/integrations": "*",
+        "laundryos/data-workspace": "*",
         "php": "^8.2",
         "ext-fileinfo": "*",
         "guzzlehttp/guzzle": "^7.8",

@@ -64,7 +64,12 @@ trait ManagesOAuth
     // Overwrite useAccessToken to use Twitter SDK
     public function useAccessToken(array $token = []): static
     {
-        $this->connection->setOauthToken($token['oauth_token'], $token['oauth_token_secret']);
+        $this->accessToken = $token;
+        if (isset($token['access_token'])) {
+            $this->connection->setBearer($token['access_token']);
+        } else {
+            $this->connection->setOauthToken($token['oauth_token'], $token['oauth_token_secret']);
+        }
 
         return $this;
     }

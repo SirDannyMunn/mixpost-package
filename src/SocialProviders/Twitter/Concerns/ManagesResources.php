@@ -82,6 +82,9 @@ trait ManagesResources
 
     public function uploadMedia(Collection $media): array
     {
+        if ($media->isNotEmpty() && isset($this->accessToken['access_token'])) {
+            return ['ids' => [], 'errors' => ['X media uploads currently require a legacy OAuth 1 account. Use a text-only post with this shared connection.']];
+        }
         $this->connection->setApiVersion('1.1');
 
         $ids = [];

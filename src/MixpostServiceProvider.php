@@ -48,6 +48,7 @@ class MixpostServiceProvider extends PackageServiceProvider
                 ClearSettingsCache::class,
                 ClearServicesCache::class,
                 RunScheduledPosts::class,
+                \Inovector\Mixpost\Commands\RunAutomations::class,
                 RefreshAccessTokens::class,
                 ImportAccountAudience::class,
                 ImportAccountData::class,
@@ -97,17 +98,19 @@ class MixpostServiceProvider extends PackageServiceProvider
 
     public function packageBooted()
     {
+        $this->loadMigrationsFrom(__DIR__ . '/../database/migrations/2026_10_07_160000_create_mixpost_automations.php');
+        $this->loadMigrationsFrom(__DIR__ . '/../database/migrations/2026_10_12_170000_add_post_version_options.php');
         $this->bootEvents();
 
         $this->registerExceptionHandler();
-        
+
         $this->loadApiRoutes();
 
         Gate::define('viewMixpost', function () {
             return true;
         });
     }
-    
+
     protected function loadApiRoutes(): void
     {
         \Illuminate\Support\Facades\Route::middleware('api')

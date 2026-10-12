@@ -8,6 +8,9 @@ class Schedule
 {
     public static function register(LaravelSchedule $schedule): void
     {
+        if (config('mixpost.schedule.run_automations_enabled', true)) {
+            $schedule->command('mixpost:run-automations')->everyMinute()->withoutOverlapping(30);
+        }
         if (config('mixpost.schedule.run_scheduled_posts_enabled', true)) {
             $schedule->command('mixpost:run-scheduled-posts')->everyMinute();
         }

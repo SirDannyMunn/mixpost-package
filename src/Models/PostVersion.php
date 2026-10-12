@@ -17,12 +17,14 @@ class PostVersion extends Model
     protected $fillable = [
         'account_id',
         'is_original',
-        'content'
+        'content',
+        'options'
     ];
 
     protected $casts = [
         'is_original' => 'boolean',
         'content' => 'array',
+        'options' => 'array',
     ];
 
     public function scopeHasMedia(Builder $query, Media $media): Builder

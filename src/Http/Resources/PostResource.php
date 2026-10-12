@@ -32,6 +32,7 @@ class PostResource extends JsonResource
                 'account_id' => (string) $account->id,
                 'provider' => $account->provider,
                 'provider_post_id' => (string) $account->pivot->provider_post_id,
+                'delivery_status' => data_get(json_decode($account->pivot->data ?? '{}', true), 'delivery_status'),
             ])->values()),
         ];
     }
