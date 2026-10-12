@@ -20,7 +20,7 @@ class SharedSocialConnection
             'twitter', 'twitter-v2', 'x' => 'twitter',
             'facebook', 'facebook-pages' => 'facebook_page',
             'instagram', 'instagram-business' => 'instagram',
-            'youtube' => 'youtube', 'tiktok', 'tiktok-sandbox' => 'tiktok', 'pinterest' => 'pinterest',
+            'youtube' => 'youtube', 'tiktok', 'tiktok-sandbox', 'tiktok-personal' => 'tiktok', 'pinterest' => 'pinterest',
             'threads' => 'threads',
             default => null,
         };

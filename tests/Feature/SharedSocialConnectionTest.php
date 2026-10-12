@@ -116,12 +116,12 @@ class SharedSocialConnectionTest extends TestCase
 
     public function test_tiktok_inbox_delivery_is_not_reported_as_publication(): void
     {
-        $this->fake('tiktok-sandbox');
+        $this->fake('tiktok-personal');
         Http::fake([
             'https://open.tiktokapis.com/v2/user/info/*' => Http::response(['data' => ['user' => ['open_id' => 'creator-1', 'display_name' => 'Test creator']]]),
             'https://open.tiktokapis.com/v2/post/publish/status/fetch/' => Http::response(['error' => ['code' => 'ok'], 'data' => ['status' => 'SEND_TO_USER_INBOX']]),
         ]);
-        $account = app(SharedSocialConnection::class)->link($this->org->id, $this->user->id, 'tiktok-sandbox', 'connection-1', 'creator-1');
+        $account = app(SharedSocialConnection::class)->link($this->org->id, $this->user->id, 'tiktok-personal', 'connection-1', 'creator-1');
         $scheduler = app(\Inovector\Mixpost\Services\Scheduler\SchedulerService::class);
         $draft = $scheduler->draft($this->org->id, $this->user->id, ['idempotency_key' => 'tiktok-inbox', 'accounts' => [$account->id], 'versions' => [['is_original' => true, 'account_id' => null, 'options' => ['tiktok' => ['mode' => 'draft', 'consent' => true]], 'content' => [['body' => 'Test video', 'media' => []]]]]]);
         $this->assertTrue($draft['versions'][0]['options']['tiktok']['consent']);
