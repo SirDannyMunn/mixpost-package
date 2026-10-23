@@ -39,9 +39,12 @@ for up to 24 hours (288 checks). Photo and video posts share that poll.
 `PUBLISH_COMPLETE` becomes `PUBLISHED`. Anything else is not reported as a
 public post.
 
-PNG files can stay in the media library. TikTok photo posts reject PNG and GIF.
-Each photo must be 20MB or smaller and 1080p or smaller: long side at most
-1920 pixels and short side at most 1080. Images and video cannot be mixed.
+PNG slides are accepted. On upload they are stored as JPEG. A PNG already
+in the library is converted when TikTok pulls the signed media URL. Conversion
+keeps the pixel size, composites alpha onto white, encodes at JPEG quality 95,
+and tags the file as sRGB. GIF files are still rejected. Each photo must be
+20MB or smaller and 1080p or smaller: long side at most 1920 pixels and short
+side at most 1080. Images and video cannot be mixed.
 
 ## Pull URLs and domain verification
 

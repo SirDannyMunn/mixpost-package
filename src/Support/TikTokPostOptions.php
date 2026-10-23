@@ -8,7 +8,7 @@ use Inovector\Mixpost\Util;
 
 class TikTokPostOptions
 {
-    public const PHOTO_MIMES = ['image/jpeg', 'image/jpg', 'image/webp'];
+    public const PHOTO_MIMES = ['image/jpeg', 'image/jpg', 'image/webp', 'image/png'];
     public const MAX_PHOTOS = 35;
     public const MAX_TITLE_UNITS = 90;
     public const MAX_DESCRIPTION_UNITS = 4000;
@@ -65,7 +65,7 @@ class TikTokPostOptions
         $photos = $items->filter(fn ($item) => $item instanceof Media && self::isPhoto($item));
         $videos = $items->filter(fn ($item) => $item instanceof Media && $item->isVideo());
         if ($items->contains(fn ($item) => $item instanceof Media && $item->isImageGif())) return 'TikTok does not accept GIFs. Use JPEG or WebP photos, or one video.';
-        if ($items->count() !== $photos->count() + $videos->count()) return 'TikTok accepts one video or up to 35 JPEG or WebP photos. PNG files can stay in the library, but TikTok cannot post them.';
+        if ($items->count() !== $photos->count() + $videos->count()) return 'TikTok accepts one video or up to 35 photos. Use JPEG, WebP, or PNG. PNG slides are sent as JPEG.';
         if ($photos->isNotEmpty() && $videos->isNotEmpty()) return 'Choose either TikTok photos or one TikTok video, not both.';
         if ($videos->count() > 1) return 'TikTok accepts one video.';
         if ($videos->isNotEmpty()) return null;
@@ -76,7 +76,7 @@ class TikTokPostOptions
         foreach ($photos as $photo) {
             if ((int) $photo->size > self::MAX_PHOTO_BYTES) return 'Each TikTok photo must be 20MB or smaller.';
             $dimensions = self::dimensions($photo);
-            if ($dimensions === null) return 'Unable to read this image for TikTok. Upload a JPEG or WebP file.';
+            if ($dimensions === null) return 'Unable to read this image for TikTok. Upload a JPEG, WebP, or PNG file.';
             [$width, $height] = $dimensions;
             if (max($width, $height) > 1920 || min($width, $height) > 1080) {
                 return 'TikTok photos must be 1080p or smaller: at most 1920 pixels on the long side and 1080 on the short side.';

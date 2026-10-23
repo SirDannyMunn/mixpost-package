@@ -173,11 +173,6 @@ class TikTokPhotoPostTest extends TestCase
     public function test_invalid_photo_posts_are_rejected_without_calling_tiktok(): void
     {
         $account = $this->account();
-        $png = $this->image('slide.png', 8, 8, 'image/png');
-        $pngDraft = $this->posts->draft($this->org->id, $this->user->id, $this->payload($account->id, [$png->id], ['mode' => 'draft', 'consent' => true], 'PNG'));
-        $this->assertFalse($this->posts->validate($this->org->id, $pngDraft['id'])['valid']);
-        $this->assertStringContainsString('JPEG', implode(' ', $this->posts->validate($this->org->id, $pngDraft['id'])['errors']));
-
         $huge = $this->image('huge.jpg', 2000, 2000);
         $hugeDraft = $this->posts->draft($this->org->id, $this->user->id, $this->payload($account->id, [$huge->id], ['mode' => 'draft', 'consent' => true], 'Too big'));
         $this->assertStringContainsString('1080p', implode(' ', $this->posts->validate($this->org->id, $hugeDraft['id'])['errors']));
@@ -198,6 +193,36 @@ class TikTokPhotoPostTest extends TestCase
             $this->assertNotEmpty($exception->errors());
         }
         Http::assertNotSent(fn ($request) => str_contains($request->url(), '/post/publish/'));
+    }
+
+    public function test_eight_png_carousel_validates_as_a_media_upload_draft_without_calling_tiktok(): void
+    {
+        $account = $this->account();
+        $tiktokCalls = fn () => collect(Http::recorded())->filter(fn ($pair) => str_contains($pair[0]->url(), 'tiktokapis.com'))->count();
+        $before = $tiktokCalls();
+        $ids = [];
+        for ($i = 0; $i < 8; $i++) {
+            $ids[] = $this->image("slide-$i.png", 1080, 1920, 'image/png')->id;
+        }
+        $draft = $this->posts->draft($this->org->id, $this->user->id, $this->payload($account->id, $ids, [
+            'mode' => 'draft', 'consent' => true, 'title' => 'PNG slides', 'photo_cover_index' => 0,
+        ], 'Eight slides'));
+        $this->assertSame('DRAFT', $draft['status']);
+        $this->assertSame('MEDIA_UPLOAD', $draft['versions'][0]['options']['tiktok']['post_mode']);
+        $result = $this->posts->validate($this->org->id, $draft['id']);
+        $this->assertTrue($result['valid'], implode(' ', $result['errors']));
+        $this->assertSame($before, $tiktokCalls());
+
+        $served = parse_url(URL::temporarySignedRoute('social.api.tiktok-media', now()->addMinutes(5), ['media' => $ids[0]]));
+        $response = $this->call('GET', $served['path'].'?'.$served['query']);
+        $response->assertOk()->assertHeader('content-type', 'image/jpeg');
+        $jpeg = $response->getContent();
+        $this->assertStringStartsWith("\xFF\xD8", $jpeg);
+        $this->assertStringContainsString('Exif', $jpeg);
+        $info = getimagesizefromstring($jpeg);
+        $this->assertSame(1080, $info[0]);
+        $this->assertSame(1920, $info[1]);
+        $this->assertSame($before, $tiktokCalls());
     }
 
     public function test_upload_stores_base64_and_public_url_without_publishing(): void
@@ -222,6 +247,20 @@ class TikTokPhotoPostTest extends TestCase
         $fromUrl = $library->store($this->org->id, $this->user->id, ['url' => 'https://cdn.example.com/photos/frame.jpg']);
         $this->assertSame('image/jpeg', $fromUrl['mime_type']);
         $this->assertNotSame($stored['media']['id'], $fromUrl['id']);
+
+        $pngStored = $library->store($this->org->id, $this->user->id, [
+            'content_base64' => base64_encode($this->transparentPng()),
+            'filename' => 'slide.png',
+            'mime_type' => 'image/png',
+        ]);
+        $this->assertSame('image/jpeg', $pngStored['mime_type']);
+        $this->assertStringEndsWith('.jpg', $pngStored['name']);
+        $converted = Storage::disk('public')->get(Media::findOrFail($pngStored['id'])->path);
+        $this->assertStringStartsWith("\xFF\xD8", $converted);
+        $decoded = imagecreatefromstring($converted);
+        $corner = imagecolorsforindex($decoded, imagecolorat($decoded, 0, 0));
+        $this->assertSame(['red' => 255, 'green' => 255, 'blue' => 255], array_intersect_key($corner, array_flip(['red', 'green', 'blue'])));
+        imagedestroy($decoded);
 
         try {
             $library->store($this->org->id, $this->user->id, ['url' => 'https://10.1.2.3/secret.jpg']);
@@ -253,14 +292,23 @@ class TikTokPhotoPostTest extends TestCase
         Http::assertNotSent(fn ($request) => str_contains($request->url(), 'tiktokapis.com'));
     }
 
-    public function test_signed_media_route_serves_jpeg_and_refuses_png(): void
+    public function test_signed_media_route_serves_jpeg_and_converts_png(): void
     {
         $jpeg = $this->image('served.jpg');
-        $png = $this->image('served.png', 8, 8, 'image/png');
+        $png = $this->imageBytes('served.png', $this->transparentPng());
         $ok = parse_url(URL::temporarySignedRoute('social.api.tiktok-media', now()->addMinutes(5), ['media' => $jpeg->id]));
         $this->call('GET', $ok['path'].'?'.$ok['query'])->assertOk()->assertHeader('content-type', 'image/jpeg');
-        $denied = parse_url(URL::temporarySignedRoute('social.api.tiktok-media', now()->addMinutes(5), ['media' => $png->id]));
-        $this->call('GET', $denied['path'].'?'.$denied['query'])->assertNotFound();
+        $converted = parse_url(URL::temporarySignedRoute('social.api.tiktok-media', now()->addMinutes(5), ['media' => $png->id]));
+        $response = $this->call('GET', $converted['path'].'?'.$converted['query']);
+        $response->assertOk()->assertHeader('content-type', 'image/jpeg');
+        $body = $response->getContent();
+        $this->assertStringStartsWith("\xFF\xD8", $body);
+        $decoded = imagecreatefromstring($body);
+        $corner = imagecolorsforindex($decoded, imagecolorat($decoded, 0, 0));
+        $this->assertSame(255, $corner['red']);
+        $this->assertSame(255, $corner['green']);
+        $this->assertSame(255, $corner['blue']);
+        imagedestroy($decoded);
     }
 
     private function account()
@@ -320,5 +368,38 @@ class TikTokPhotoPostTest extends TestCase
         $bytes = ob_get_clean();
         imagedestroy($image);
         return $bytes;
+    }
+
+    private function transparentPng(): string
+    {
+        $image = imagecreatetruecolor(32, 32);
+        imagealphablending($image, false);
+        imagesavealpha($image, true);
+        $clear = imagecolorallocatealpha($image, 0, 0, 0, 127);
+        imagefilledrectangle($image, 0, 0, 31, 31, $clear);
+        $red = imagecolorallocatealpha($image, 220, 30, 30, 0);
+        imagesetpixel($image, 31, 31, $red);
+        ob_start();
+        imagepng($image);
+        $bytes = ob_get_clean();
+        imagedestroy($image);
+        return $bytes;
+    }
+
+    private function imageBytes(string $name, string $bytes): Media
+    {
+        $path = 'tiktok-tests/'.$name;
+        Storage::disk('public')->put($path, $bytes);
+        return Media::create([
+            'organization_id' => $this->org->id,
+            'uploaded_by' => $this->user->id,
+            'name' => $name,
+            'mime_type' => 'image/png',
+            'disk' => 'public',
+            'path' => $path,
+            'size' => strlen($bytes),
+            'size_total' => strlen($bytes),
+            'conversions' => [],
+        ]);
     }
 }

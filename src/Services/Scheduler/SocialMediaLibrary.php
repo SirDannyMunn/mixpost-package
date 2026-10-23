@@ -11,6 +11,7 @@ use Inovector\Mixpost\MediaConversions\MediaVideoThumbConversion;
 use Inovector\Mixpost\Models\Media;
 use Inovector\Mixpost\Support\MediaUploader;
 use Inovector\Mixpost\Support\PublicMediaUrl;
+use Inovector\Mixpost\Support\TikTokJpeg;
 
 /** Stores files in the social media library. Uploading does not publish. */
 class SocialMediaLibrary
@@ -130,6 +131,15 @@ class SocialMediaLibrary
         $detected = $this->sniff($binary);
         if ($claimed !== '' && !$this->equivalent($claimed, $detected)) {
             throw ValidationException::withMessages(['mime_type' => 'The file contents do not match the declared type.']);
+        }
+        if ($detected === 'image/png') {
+            try {
+                $binary = TikTokJpeg::fromPng($binary);
+            } catch (\Throwable) {
+                throw ValidationException::withMessages(['file' => 'The PNG could not be converted to a JPEG.']);
+            }
+            $detected = 'image/jpeg';
+            $filename = preg_replace('/\.png$/i', '', $filename) ?: $filename;
         }
         if (strlen($binary) > $this->maxBytes($detected)) {
             throw ValidationException::withMessages(['file' => 'The file is larger than the social library allows.']);
