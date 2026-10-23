@@ -36,10 +36,16 @@ class SharedSocialConnection
             if ($provider && $key && !in_array('nango:'.$key, $disabled, true)) $integrations[$key] = ['key' => $key, 'provider' => $provider, 'name' => $item['display_name'] ?? $provider];
         }
         $connections = [];
+        $accounts = Account::where('organization_id', $org)->get(['id', 'organization_id', 'name', 'username', 'media', 'data']);
         foreach (EmailProvider::rows($this->nango->listConnections(['tags' => ['organization_id' => $org]]), ['connections', 'data']) as $item) {
             $key = $item['provider_config_key'] ?? '';
             if (isset($integrations[$key]) && EmailProvider::organization($item) === $org && EmailProvider::healthy($item)) {
-                $connections[] = ['key' => $key, 'id' => $item['connection_id'], 'provider' => $integrations[$key]['provider']];
+                $account = $accounts->first(fn ($account) => ($account->data['integration']['key'] ?? null) === $key && ($account->data['integration']['connection_id'] ?? null) === $item['connection_id']);
+                // end_user identifies the workspace user, not the connected social profile.
+                $name = $account?->name ?: EmailProvider::first($item, ['metadata.account_display_name', 'metadata.display_name']);
+                $connections[] = ['key' => $key, 'id' => $item['connection_id'], 'provider' => $integrations[$key]['provider'],
+                    'name' => $name ?: null, 'name_is_placeholder' => !$name,
+                    'username' => $account?->username ?: '', 'image' => $account?->image()];
             }
         }
         return ['integrations' => array_values($integrations), 'connections' => $connections];
@@ -76,7 +82,15 @@ class SharedSocialConnection
         $response = $provider === 'facebook_page' ? $adapter->getEntities() : $adapter->getAccount();
         if ($response->hasError()) throw ValidationException::withMessages(['connection' => 'Could not read this social profile. Check its permissions in Integrations.']);
         $targets = $provider === 'facebook_page' ? $response->context() : [$response->context()];
-        return array_map(fn ($target) => ['id' => (string) $target['id'], 'name' => $target['name'], 'username' => $target['username'] ?? ''], $targets);
+        $linked = Account::where('organization_id', $org)->where('provider', $provider)->where('authorized', true)->pluck('provider_id')->map(fn ($value) => (string) $value)->all();
+        return array_map(fn ($target) => ['id' => (string) $target['id'], 'name' => $target['name'], 'username' => $target['username'] ?? '',
+            'image' => $this->profileImage($target), 'linked' => in_array((string) $target['id'], $linked, true)], $targets);
+    }
+
+    private function profileImage(array $target): ?string
+    {
+        $image = $target['image'] ?? $target['avatar_url'] ?? null;
+        return is_string($image) && filter_var($image, FILTER_VALIDATE_URL) && in_array(strtolower(parse_url($image, PHP_URL_SCHEME) ?? ''), ['https', 'http'], true) ? $image : null;
     }
 
     public function link(string $org, string $actor, string $key, string $id, string $target): Account

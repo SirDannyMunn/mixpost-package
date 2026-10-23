@@ -65,7 +65,7 @@ class SharedSocialConnectionTest extends TestCase
     {
         $this->fake();
         $response = $this->withHeader('X-Organization-Id', $this->org->id)->postJson('/api/v1/social/accounts/integrations/targets', ['key' => 'linkedin', 'connection_id' => 'connection-1'])->assertOk();
-        $response->assertExactJson(['targets' => [['id' => 'person-1', 'name' => 'Test Person', 'username' => '']]]);
+        $response->assertExactJson(['targets' => [['id' => 'person-1', 'name' => 'Test Person', 'username' => '', 'image' => null, 'linked' => false]]]);
         $this->postJson('/api/v1/social/accounts/integrations/link', ['key' => 'linkedin', 'connection_id' => 'connection-1', 'target_id' => 'foreign-person'])->assertUnprocessable();
         $this->assertSame(0, Account::count());
     }
