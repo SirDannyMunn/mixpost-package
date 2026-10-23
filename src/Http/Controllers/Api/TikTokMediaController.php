@@ -12,7 +12,9 @@ class TikTokMediaController
         abort_unless($this->hasValidMediaSignature($request), 403);
         $item = Media::findOrFail($media);
         // Never proxy arbitrary external URLs through a signed endpoint.
-        abort_if($item->disk === 'external_media' || !$item->isVideo(), 404);
+        // TikTok photo posts pull JPEG or WebP from this same signed route.
+        $photo = in_array(strtolower((string) $item->mime_type), ['image/jpeg', 'image/jpg', 'image/webp'], true);
+        abort_if($item->disk === 'external_media' || !($item->isVideo() || $photo), 404);
         $stream = $item->filesystem()->readStream($item->path);
         abort_unless(is_resource($stream), 404);
         return response()->stream(function () use ($stream) {

@@ -44,10 +44,10 @@ class TikTokProvider extends SocialProvider
             ->simultaneousPosting(Util::config('social_provider_options.tiktok.simultaneous_posting_on_multiple_accounts', true))
             ->minTextChar(0)
             ->maxTextChar(Util::config('social_provider_options.tiktok.post_character_limit', 2200))
-            ->minVideos(1)
+            ->minVideos(0)
             ->maxVideos(Util::config('social_provider_options.tiktok.media_limit.videos', 1))
             ->minPhotos(0)
-            ->maxPhotos(0)
+            ->maxPhotos(Util::config('social_provider_options.tiktok.media_limit.photos', 35))
             ->allowMixingMediaTypes(Util::config('social_provider_options.tiktok.allow_mixing', false));
     }
 
