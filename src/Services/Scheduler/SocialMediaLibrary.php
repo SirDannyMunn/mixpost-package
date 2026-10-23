@@ -58,8 +58,11 @@ class SocialMediaLibrary
     {
         $hasUrl = isset($input['url']) && $input['url'] !== '';
         $hasBytes = isset($input['content_base64']) && $input['content_base64'] !== '';
-        if ($hasUrl === $hasBytes) {
+        if ($hasUrl && $hasBytes) {
             throw ValidationException::withMessages(['file' => 'Provide either a public url or base64 file content, not both.']);
+        }
+        if (!$hasUrl && !$hasBytes) {
+            throw ValidationException::withMessages(['file' => 'Provide a public url or base64 file content.']);
         }
         if ($hasBytes) {
             if (trim((string) ($input['filename'] ?? '')) === '') {

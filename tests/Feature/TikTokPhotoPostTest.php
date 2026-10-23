@@ -289,6 +289,29 @@ class TikTokPhotoPostTest extends TestCase
             $this->fail('An oversized image was stored.');
         } catch (ValidationException) {
         }
+        try {
+            $library->store($this->org->id, $this->user->id, []);
+            $this->fail('An upload with neither url nor file content was stored.');
+        } catch (ValidationException $exception) {
+            $this->assertSame(['Provide a public url or base64 file content.'], $exception->errors()['file']);
+        }
+        try {
+            $library->store($this->org->id, $this->user->id, ['url' => '', 'content_base64' => '']);
+            $this->fail('An upload with blank url and file content was stored.');
+        } catch (ValidationException $exception) {
+            $this->assertSame(['Provide a public url or base64 file content.'], $exception->errors()['file']);
+        }
+        try {
+            $library->store($this->org->id, $this->user->id, [
+                'url' => 'https://cdn.example.com/photos/frame.jpg',
+                'content_base64' => base64_encode($jpeg),
+                'filename' => 'frame.jpg',
+                'mime_type' => 'image/jpeg',
+            ]);
+            $this->fail('An upload with both url and file content was stored.');
+        } catch (ValidationException $exception) {
+            $this->assertSame(['Provide either a public url or base64 file content, not both.'], $exception->errors()['file']);
+        }
         Http::assertNotSent(fn ($request) => str_contains($request->url(), 'tiktokapis.com'));
     }
 
