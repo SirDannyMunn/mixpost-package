@@ -4,6 +4,7 @@ namespace Inovector\Mixpost\Support;
 
 use Illuminate\Support\Collection;
 use Inovector\Mixpost\Models\Media;
+use Inovector\Mixpost\Util;
 
 class TikTokPostOptions
 {
@@ -17,8 +18,8 @@ class TikTokPostOptions
     {
         $prefix = 'versions.*.options';
         $rules = [$prefix => ['sometimes', 'nullable', 'array'], "$prefix.tiktok" => ['sometimes', 'array'],
-            "$prefix.tiktok.mode" => ['required_without:versions.*.options.tiktok.post_mode', 'nullable', 'in:direct,draft'],
-            "$prefix.tiktok.post_mode" => ['required_without:versions.*.options.tiktok.mode', 'nullable', 'in:DIRECT_POST,MEDIA_UPLOAD'],
+            "$prefix.tiktok.mode" => ['sometimes', 'nullable', 'in:direct,draft'],
+            "$prefix.tiktok.post_mode" => ['sometimes', 'nullable', 'in:DIRECT_POST,MEDIA_UPLOAD'],
             "$prefix.tiktok.privacy_level" => ['nullable', 'in:PUBLIC_TO_EVERYONE,MUTUAL_FOLLOW_FRIENDS,FOLLOWER_OF_CREATOR,SELF_ONLY'],
             "$prefix.tiktok.title" => ['nullable', 'string', 'max:180'],
             "$prefix.tiktok.description" => ['nullable', 'string', 'max:8000'],

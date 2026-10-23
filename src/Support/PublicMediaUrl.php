@@ -3,6 +3,7 @@
 namespace Inovector\Mixpost\Support;
 
 use Illuminate\Validation\ValidationException;
+use Inovector\Mixpost\Util;
 
 /** HTTPS URLs TikTok or this app may fetch. Rejects private, link-local, and loopback targets. */
 class PublicMediaUrl

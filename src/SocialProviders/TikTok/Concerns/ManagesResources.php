@@ -180,7 +180,7 @@ trait ManagesResources
         $payload = [
             'media_type' => 'PHOTO',
             'post_mode' => $direct ? 'DIRECT_POST' : 'MEDIA_UPLOAD',
-            'post_info' => (object) $postInfo,
+            'post_info' => $postInfo === [] ? (object) [] : $postInfo,
             'source_info' => [
                 'source' => 'PULL_FROM_URL',
                 'photo_cover_index' => (int) ($params['photo_cover_index'] ?? 0),
