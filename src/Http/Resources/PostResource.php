@@ -19,6 +19,7 @@ class PostResource extends JsonResource
             'accounts' => AccountResource::collection($this->whenLoaded('accounts')),
             'versions' => PostVersionResource::collection($this->whenLoaded('versions')),
             'tags' => TagResource::collection($this->whenLoaded('tags')),
+            'calendar_date' => ($this->scheduled_at ?? ($this->status->name === 'DRAFT' ? $this->created_at : null))?->copy()->tz(Settings::get('timezone'))->toDateString(),
             'scheduled_at' => [
                 'date' => $this->scheduled_at?->tz(Settings::get('timezone'))->toDateString(),
                 'time' => $this->scheduled_at?->tz(Settings::get('timezone'))->format('H:i'),
