@@ -52,12 +52,13 @@ class SchedulePost extends FormRequest
             foreach ($this->post->accounts as $account) {
                 if ($account->provider !== 'tiktok') continue;
                 $parser = new \Inovector\Mixpost\Support\PostContentParser($account, $this->post);
-                $mediaIds = data_get($parser->getVersionContent(), '0.media', []);
-                $media = \Inovector\Mixpost\Models\Media::forOrganization($this->post->organization_id)->whereIn('id', $mediaIds)->get();
-                if ($media->count() !== count($mediaIds) || ($error = \Inovector\Mixpost\Support\TikTokPostMedia::error($media))) {
-                    throw \Illuminate\Validation\ValidationException::withMessages(['tiktok' => $error ?? 'Some post media is unavailable.']);
+                $options = $parser->getVersionOptions();
+                if ($error = \Inovector\Mixpost\Support\TikTokPostOptions::error($options)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['tiktok' => $error]);
                 }
-                if ($error = \Inovector\Mixpost\Support\TikTokPostOptions::error($parser->getVersionOptions())) {
+                $content = $parser->getVersionContent();
+                $media = $parser->formatMedia($content[0]['media'] ?? []);
+                if ($error = \Inovector\Mixpost\Support\TikTokPostOptions::compositionError($media, $options, $parser->formatBody(data_get($content, '0.body', '')))) {
                     throw \Illuminate\Validation\ValidationException::withMessages(['tiktok' => $error]);
                 }
             }

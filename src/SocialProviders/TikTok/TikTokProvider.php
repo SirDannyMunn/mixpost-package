@@ -47,7 +47,7 @@ class TikTokProvider extends SocialProvider
             ->minVideos(0)
             ->maxVideos(Util::config('social_provider_options.tiktok.media_limit.videos', 1))
             ->minPhotos(0)
-            ->maxPhotos(35)
+            ->maxPhotos(Util::config('social_provider_options.tiktok.media_limit.photos', 35))
             ->allowMixingMediaTypes(Util::config('social_provider_options.tiktok.allow_mixing', false));
     }
 

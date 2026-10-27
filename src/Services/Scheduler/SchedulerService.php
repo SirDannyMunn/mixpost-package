@@ -45,6 +45,12 @@ class SchedulerService
     public function draft(string $org, ?string $actor, array $data, ?string $id = null): array
     {
         $v = $this->validatePayload($org, $data);
+        $v['versions'] = array_map(function (array $version): array {
+            if (isset($version['options']['tiktok']) && is_array($version['options']['tiktok'])) {
+                $version['options']['tiktok'] = \Inovector\Mixpost\Support\TikTokPostOptions::normalize($version['options']['tiktok']);
+            }
+            return $version;
+        }, $v['versions']);
         if (!$id) Validator::make($data, ['idempotency_key' => ['required', 'string', 'max:128']])->validate();
         return DB::transaction(function () use ($org, $actor, $data, $v, $id) {
             if (!$id) {
@@ -85,7 +91,7 @@ class SchedulerService
             'versions.*.account_id' => ['nullable', 'uuid'], 'versions.*.is_original' => ['required', 'boolean'],
             'versions.*.content' => ['required', 'array', 'size:1'],
             'versions.*.content.*.body' => ['present', 'nullable', 'string', 'max:5000'],
-            'versions.*.content.*.media' => ['present', 'array', 'max:20'],
+            'versions.*.content.*.media' => ['present', 'array', 'max:35'],
             'versions.*.content.*.media.*' => ['uuid', Rule::exists('mixpost_media', 'id')->where('organization_id', $org)],
         ])->validate();
         if (collect($v['versions'])->where('is_original', true)->count() !== 1) throw ValidationException::withMessages(['versions' => 'Exactly one original version is required.']);
@@ -116,16 +122,18 @@ class SchedulerService
             $configs = $account->postConfigs();
             if (count($content) !== 1) $errors[] = "{$account->name}: exactly one content block is currently supported.";
             if (trim($body) === '' && !$media) $errors[] = "{$account->name}: content is empty.";
-            if (mb_strlen($body) > data_get($configs, 'text_char_limit.max.default', 5000)) $errors[] = "{$account->name}: text exceeds the provider limit.";
-            $items = Media::forOrganization($org)->whereIn('id', $media)->get();
-            if ($items->count() !== count(array_unique($media))) $errors[] = "{$account->name}: media is missing or belongs to another organization.";
+            $found = Media::forOrganization($org)->whereIn('id', $media)->get()->keyBy('id');
+            if ($found->count() !== count(array_unique($media))) $errors[] = "{$account->name}: media is missing or belongs to another organization.";
+            $items = collect($media)->map(fn ($id) => $found->get($id))->filter()->values();
+            $tiktokPhotos = $account->provider === 'tiktok' && $items->contains(fn ($item) => \Inovector\Mixpost\Support\TikTokPostOptions::isPhoto($item));
+            if (!$tiktokPhotos && mb_strlen($body) > data_get($configs, 'text_char_limit.max.default', 5000)) $errors[] = "{$account->name}: text exceeds the provider limit.";
             foreach (['photos' => 'image/', 'videos' => 'video/', 'gifs' => 'image/gif'] as $kind => $mime) {
                 $count = $items->filter(fn ($m) => $kind === 'photos' ? str_starts_with($m->mime_type, $mime) && $m->mime_type !== 'image/gif' : str_starts_with($m->mime_type, $mime))->count();
                 if ($count > data_get($configs, "media_limit.max.$kind.default", 0)) $errors[] = "{$account->name}: too many $kind.";
             }
             if (in_array($account->provider, ['instagram', 'pinterest', 'tiktok', 'youtube'], true) && $items->isEmpty()) $errors[] = "{$account->name}: media is required.";
-            if ($account->provider === 'tiktok' && ($error = \Inovector\Mixpost\Support\TikTokPostMedia::error($items))) $errors[] = "{$account->name}: $error";
-            if ($account->provider === 'youtube' && !$items->contains(fn ($m) => str_starts_with($m->mime_type, 'video/'))) $errors[] = "{$account->name}: video is required.";
+            if ($account->provider === 'youtube' && !$items->contains(fn ($m) => str_starts_with((string) $m->mime_type, 'video/'))) $errors[] = "{$account->name}: video is required.";
+            if ($account->provider === 'tiktok' && ($error = \Inovector\Mixpost\Support\TikTokPostOptions::compositionError($items, $parser->getVersionOptions(), $body))) $errors[] = "{$account->name}: $error";
         }
         return ['valid' => !$errors, 'errors' => array_values(array_unique($errors)), 'post' => $this->serialize($post)];
     }
@@ -164,8 +172,12 @@ class SchedulerService
             'revision' => hash('sha256', json_encode([$post->getAttributes(), $post->versions->toArray(), $post->accounts->modelKeys(), $post->tags->modelKeys()], JSON_THROW_ON_ERROR)),
             'scheduled_at' => $post->scheduled_at?->toIso8601String(), 'published_at' => $post->published_at?->toIso8601String(),
             'updated_at' => $post->updated_at?->toIso8601String(),
-            'accounts' => $post->accounts->map(fn ($a) => ['id' => $a->id, 'name' => $a->name, 'provider' => $a->provider,
-                'provider_post_id' => $a->pivot->provider_post_id, 'delivery_status' => data_get(json_decode($a->pivot->data ?? '{}', true), 'delivery_status'), 'errors' => $a->pivot->errors])->all(),
+            'accounts' => $post->accounts->map(function ($a) {
+                $data = json_decode($a->pivot->data ?? '{}', true) ?: [];
+                return ['id' => $a->id, 'name' => $a->name, 'provider' => $a->provider,
+                    'provider_post_id' => $a->pivot->provider_post_id, 'delivery_status' => $data['delivery_status'] ?? null,
+                    'media_type' => $data['media_type'] ?? null, 'post_mode' => $data['post_mode'] ?? null, 'errors' => $a->pivot->errors];
+            })->all(),
             'versions' => $post->versions->map(fn ($v) => $v->only('account_id', 'is_original', 'content', 'options'))->all(),
             'tags' => $post->tags->modelKeys(),
         ];

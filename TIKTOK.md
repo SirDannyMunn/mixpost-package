@@ -2,32 +2,76 @@
 
 TikTok and TikTok Sandbox connections are linked from the shared Integrations
 catalog. Tokens remain in Nango and are resolved for each provider operation.
+No new environment variables are required for photo posts or media upload.
+Post options already live on `mixpost_post_versions.options`
+(`2026_10_12_170000_add_post_version_options`). No new migration is required.
 
-The composer requests current creator settings, requires an explicit privacy
-choice for direct posts, defaults interactions off, and collects content
-disclosure and approval. Changing content, media, account or TikTok controls
-clears approval. One uploaded video or 1–35 uploaded JPEG, PNG or WebP photos
-is supported. Mixed photos and video are rejected. The browser previews every
-slide, supports reordering and uses the first photo as the cover. Video duration
-is checked in the browser and again by the worker with FFprobe.
+## Video and photo posts
 
-Videos are served through a two-hour signed, read-only media URL on the API
-domain using TikTok's PULL_FROM_URL flow. Verify the API domain or its parent
-domain in the TikTok app. The route streams stored videos and prepares stored
-photos as JPEGs within 1080p without cropping or changing the originals. It does
-not proxy external URLs. Photo requests use `/v2/post/publish/content/init/`,
-preserve the reviewed photo order and caption, and select `DIRECT_POST` or
-`MEDIA_UPLOAD` according to the chosen delivery mode. Each original photo is
-limited to 20 MB. Production requires FFprobe at `mixpost.ffprobe_path` for videos.
+| | Video | Photo carousel |
+| --- | --- | --- |
+| Init endpoint | `POST /v2/post/publish/video/init/` or `POST /v2/post/publish/inbox/video/init/` | `POST /v2/post/publish/content/init/` |
+| `media_type` | `VIDEO` | `PHOTO` |
+| Source | `PULL_FROM_URL` | `PULL_FROM_URL` only |
+| Files | One uploaded video | 1–35 JPEG or WebP images |
+| Text | Content body is the caption (about 2,200 characters) | `options.tiktok.title` up to 90 UTF-16 code units; description up to 4,000 UTF-16 code units. The description option overrides the body when set. |
+| Cover | n/a | `photo_cover_index`, zero-based, required by TikTok |
 
-The worker stores the accepted publish ID and polls status after 20 seconds,
-then every five minutes for up to 24 hours. It never automatically resubmits an
-accepted TikTok post. `PUBLISHED` requires TikTok's `PUBLISH_COMPLETE` response.
-`DELIVERED` means sent to the TikTok inbox; the creator still needs to finish
-posting in TikTok. Unknown or failed processing is not reported as publication.
+`options.tiktok.mode` stays `direct` or `draft`. `post_mode` is the Content
+Posting API value and is filled in when omitted:
 
-Options are persisted by the `2026_10_12_170000_add_post_version_options`
-migration. Deploy with queue workers restarted. Automations clear inherited
-TikTok approval; TikTok-generated drafts must be reviewed in the composer.
-MCP tools can create those drafts and inspect delivery status, but cannot
-substitute for the creator's review.
+- `draft` / `MEDIA_UPLOAD` uses scope `video.upload`. TikTok puts the upload in
+  the creator inbox. It is not a public post. Status `SEND_TO_USER_INBOX` is
+  stored as `DELIVERED`.
+- `direct` / `DIRECT_POST` uses scope `video.publish`. It is the public post.
+  Direct posts require `privacy_level` (one of the creator
+  `privacy_level_options`), interaction flags, and commercial-content flags.
+  Photo direct posts also send `auto_add_music` and may send `is_aigc`.
+
+Creating a draft, validating, and uploading media never call TikTok. The init
+request runs only inside the scheduler worker after `schedule_social_post` or
+`publish_social_post`. A timeout after submit is not retried. An existing
+TikTok `provider_post_id` is not submitted again.
+
+The worker stores the `publish_id` and polls
+`POST /v2/post/publish/status/fetch/` after 20 seconds, then every five minutes
+for up to 24 hours (288 checks). Photo and video posts share that poll.
+`PUBLISH_COMPLETE` becomes `PUBLISHED`. Anything else is not reported as a
+public post.
+
+PNG slides are accepted. On upload they are stored as JPEG. A PNG already
+in the library is converted when TikTok pulls the signed media URL. Conversion
+keeps the pixel size, composites alpha onto white, encodes at JPEG quality 95,
+and tags the file as sRGB. GIF files are still rejected. Each photo must be
+20MB or smaller and 1080p or smaller: long side at most 1920 pixels and short
+side at most 1080. Images and video cannot be mixed.
+
+## Pull URLs and domain verification
+
+Video and photo bytes are not uploaded from the worker. TikTok downloads them
+from a two-hour signed URL:
+
+`https://api.usetwl.com/api/v1/social/tiktok-media/{media}?signature=...`
+
+The route streams the file from `MIXPOST_DISK` (default `public`). It does not
+proxy S3 or other external URLs, and it serves only video plus JPEG/WebP.
+`APP_URL` must be the public `https://api.usetwl.com` origin with no redirect.
+TikTok refuses non-HTTPS URLs, redirects, and URLs whose domain or prefix is
+not verified (`url_ownership_unverified`).
+
+Manual step in the TikTok Developer Portal, on the app URL properties for
+Production:
+
+1. Verify domain `api.usetwl.com` (DNS), or verify the parent domain
+   `usetwl.com` so its subdomains are covered.
+2. Verifying only `www.usetwl.com` does not cover `api.usetwl.com`.
+3. Or verify the URL prefix `https://api.usetwl.com/api/v1/social/tiktok-media/`.
+   Signed query strings are accepted when the path prefix matches.
+
+This repository cannot complete that portal step. Until it is done, direct and
+inbox init calls fail even though TWL validation succeeds.
+
+FFprobe (`mixpost.ffprobe_path`) is required for video duration checks only.
+Photo posts do not use it. Automations clear inherited TikTok approval;
+generated drafts must be reviewed before scheduling. `consent` must be true
+before validate, schedule, or publish.
