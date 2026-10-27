@@ -23,11 +23,11 @@ class SchedulePost extends FormRequest
 
         $validator->after(function ($validator) {
             if ($this->post->isInHistory()) {
-                $validator->errors()->add('in_history', 'in_history');
+                $validator->errors()->add('post', 'This post is in your publishing history. Duplicate it as a draft to edit or schedule it again.');
             }
 
             if ($this->post->isScheduleProcessing()) {
-                $validator->errors()->add('publishing', 'publishing');
+                $validator->errors()->add('post', 'This post is already being published. Wait for it to finish before trying again.');
             }
 
             if ($this->input('postNow')) {

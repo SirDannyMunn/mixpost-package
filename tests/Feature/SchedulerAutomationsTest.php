@@ -251,4 +251,27 @@ class SchedulerAutomationsTest extends TestCase
             ...$this->payload(), 'tags' => [], 'date' => '2020-07-15', 'time' => '09:00', 'timezone' => 'Invalid/Zone',
         ], $headers)->assertUnprocessable();
     }
+
+    public function test_history_errors_are_actionable_and_post_now_uses_the_current_time(): void
+    {
+        $draft = $this->draft();
+        $post = $this->posts->post($this->org->id, $draft['id']);
+        $headers = ['X-Organization-Id' => $this->org->id];
+        foreach ([\Inovector\Mixpost\Enums\PostStatus::FAILED, \Inovector\Mixpost\Enums\PostStatus::PUBLISHED, \Inovector\Mixpost\Enums\PostStatus::DELIVERED] as $status) {
+            $post->forceFill(['status' => $status])->save();
+            $this->putJson('/api/v1/social/posts/'.$draft['id'], [
+                ...$this->payload(), 'tags' => [], 'date' => '2030-10-23', 'time' => '09:00',
+            ], $headers)->assertUnprocessable()->assertJsonPath('errors.post.0', 'This post is in your publishing history. Duplicate it as a draft to edit or schedule it again.');
+            $this->postJson('/api/v1/social/posts/schedule/'.$draft['id'], ['postNow' => true], $headers)
+                ->assertUnprocessable()->assertJsonPath('errors.post.0', 'This post is in your publishing history. Duplicate it as a draft to edit or schedule it again.');
+        }
+        $post->setDraft();
+        $post->scheduled_at = now()->addYear();
+        $post->save();
+        $this->postJson('/api/v1/social/posts/schedule/'.$draft['id'], ['postNow' => true], $headers)->assertSuccessful();
+        $post->refresh();
+        $this->assertSame('SCHEDULED', $post->status->name);
+        $this->assertTrue($post->scheduled_at->lessThanOrEqualTo(now()->utc()));
+        $this->assertTrue($post->scheduled_at->greaterThan(now()->utc()->subMinute()));
+    }
 }
