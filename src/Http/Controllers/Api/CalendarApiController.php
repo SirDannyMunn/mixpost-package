@@ -35,6 +35,7 @@ class CalendarApiController extends Controller
                     'accounts' => Arr::map($request->get('accounts', []), 'strval'),
                 ],
             ]),
+            'timezone' => \Inovector\Mixpost\Facades\Settings::get('timezone'),
             'type' => $request->type(),
             'selected_date' => $request->selectedDate(),
             'filter' => [

@@ -15,6 +15,13 @@ class AccountPublishPost
 
     public function __invoke(Account $account, Post $post): SocialProviderResponse
     {
+        $existing = $post->accounts()->where('mixpost_accounts.id', $account->id)->first();
+        if ($account->provider === 'tiktok' && $existing?->pivot->provider_post_id) {
+            return new SocialProviderResponse(SocialProviderResponseStatus::OK, [
+                'id' => $existing->pivot->provider_post_id,
+                'data' => json_decode($existing->pivot->data ?? '{}', true) ?: [],
+            ]);
+        }
         $parser = new PostContentParser($account, $post);
 
         $content = $parser->getVersionContent();
@@ -27,9 +34,25 @@ class AccountPublishPost
             return $response;
         }
 
-        $response = $this->connectProvider($account)->publishPost(
+        try {
+            $connection = $this->connectProvider($account);
+        } catch (\Throwable $error) {
+            // Credential retrieval can fail before the provider returns its normal response.
+            // Record a failed delivery instead of letting batch completion mark it published.
+            $errors = ['Unable to access the connected account. Check Integrations and retry.'];
+            $response = new SocialProviderResponse(SocialProviderResponseStatus::ERROR, $errors);
+            $post->insertErrors($account, $errors, $response);
+            return $response;
+        }
+        $media = $parser->formatMedia($content[0]['media']);
+        if ($media->count() !== count($content[0]['media']) || $media->contains(fn ($item) => !$item || (string) $item->organization_id !== (string) $account->organization_id)) {
+            $response = new SocialProviderResponse(SocialProviderResponseStatus::ERROR, ['Media is missing or unavailable in this workspace.']);
+            $post->insertErrors($account, $response->context(), $response);
+            return $response;
+        }
+        $response = $connection->publishPost(
             text: $parser->formatBody($content[0]['body']),
-            media: $parser->formatMedia($content[0]['media']),
+            media: $media,
             params: $parser->getVersionOptions()
         );
 

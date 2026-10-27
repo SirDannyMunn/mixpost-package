@@ -16,6 +16,12 @@ class InstagramProvider extends MetaProvider
 
     public bool $onlyUserAccount = false;
 
+    public function useInstagramLogin(): static
+    {
+        $this->apiUrl = 'https://graph.instagram.com';
+        return $this;
+    }
+
     public static function name(): string
     {
         return 'Instagram';

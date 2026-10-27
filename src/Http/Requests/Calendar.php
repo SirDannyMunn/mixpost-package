@@ -17,7 +17,6 @@ class Calendar extends FormRequest
         $data = [
             'calendar_type' => $this->type(),
             'date' => $this->selectedDate(),
-            'exclude_status' => 'draft',
         ];
 
         $this->query->add($data);

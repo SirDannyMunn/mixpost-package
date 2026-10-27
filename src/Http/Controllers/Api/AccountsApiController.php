@@ -16,6 +16,18 @@ class AccountsApiController extends Controller
 {
     use UsesSocialProviderManager;
 
+    public function tiktokCreator(string $account): JsonResponse
+    {
+        $org = app(\Inovector\Mixpost\Services\Scheduler\SchedulerAccess::class)->organization(null, true);
+        $model = Account::forOrganization($org)->where('id', $account)->where('provider', 'tiktok')->firstOrFail();
+        $provider = $this->connectProvider($model);
+        $response = $provider->creatorInfo();
+        if ($response->hasError()) {
+            return response()->json(['message' => 'TikTok could not load your publishing settings. Reconnect or try again later.'], 422);
+        }
+        return response()->json(['creator' => $response->context()]);
+    }
+
     /**
      * List all connected accounts.
      */
@@ -35,8 +47,14 @@ class AccountsApiController extends Controller
      */
     public function update(Request $request, string $account): JsonResponse
     {
-        $accountModel = Account::forCurrentOrganization()
-            ->firstOrFailByUuid($account);
+        $org = app(\Inovector\Mixpost\Services\Scheduler\SchedulerAccess::class)->organization(null, true);
+        $accountModel = Account::forOrganization($org)->where('uuid', $account)->firstOrFail();
+
+        if (!empty($accountModel->data['integration'])) {
+            $ref = $accountModel->data['integration'];
+            $updated = app(\Inovector\Mixpost\Services\Integrations\SharedSocialConnection::class)->link($org, (string) $request->user()->id, $ref['key'], $ref['connection_id'], (string) $accountModel->provider_id);
+            return response()->json(['message' => 'Account refreshed from Integrations', 'account' => new AccountResource($updated)]);
+        }
 
         $connection = $this->connectProvider($accountModel);
 
@@ -75,8 +93,13 @@ class AccountsApiController extends Controller
      */
     public function destroy(Request $request, string $account): JsonResponse
     {
-        $accountModel = Account::forCurrentOrganization()
-            ->firstOrFailByUuid($account);
+        $org = app(\Inovector\Mixpost\Services\Scheduler\SchedulerAccess::class)->organization(null, true);
+        $accountModel = Account::forOrganization($org)->where('uuid', $account)->firstOrFail();
+
+        if (!empty($accountModel->data['integration'])) {
+            $accountModel->delete();
+            return response()->json(['message' => 'Removed from the scheduler. Shared integration remains connected.']);
+        }
 
         $connection = $this->connectProvider($accountModel);
 

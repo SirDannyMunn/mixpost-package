@@ -19,6 +19,7 @@ class PostVersionResource extends JsonResource
             'post_id' => $this->post_id,
             'account_id' => $this->account_id,
             'is_original' => $this->is_original,
+            'options' => $this->options ?? [],
             'content' => $this->content()
         ];
     }

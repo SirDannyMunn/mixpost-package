@@ -61,7 +61,7 @@ class Post extends Model
     {
         return $this->belongsToMany(Account::class, 'mixpost_post_accounts', 'post_id', 'account_id')
             ->using(PostAccount::class)
-            ->withPivot(['errors', 'provider_post_id'])
+              ->withPivot(['errors', 'provider_post_id', 'data'])
             ->orderByPivot('id');
     }
 
@@ -98,7 +98,7 @@ class Post extends Model
     public function canSchedule(): bool
     {
         // TODO: check if original content is not empty
-        return $this->scheduled_at && !$this->scheduled_at->isPast() && $this->accounts()->exists();
+        return $this->scheduled_at && $this->accounts()->exists();
     }
 
     public function isScheduled(): bool
@@ -118,7 +118,7 @@ class Post extends Model
 
     public function isInHistory(): bool
     {
-        return $this->isPublished() || $this->isFailed();
+        return $this->isPublished() || $this->isFailed() || $this->status === PostStatus::DELIVERED;
     }
 
     public function isScheduleProcessing(): bool

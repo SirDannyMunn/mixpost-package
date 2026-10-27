@@ -28,6 +28,24 @@ class UpdatePost extends PostFormRequest
     public function handle()
     {
         return DB::transaction(function () {
+            $this->post = Post::forCurrentOrganization()->whereKey($this->post->id)->lockForUpdate()->firstOrFail();
+            if ($this->post->isInHistory() || $this->post->isScheduleProcessing()) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['post' => 'This post can no longer be edited.']);
+            }
+            if ($this->exists('expected_status') && $this->post->status->name !== $this->input('expected_status')) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['post' => 'This post changed status. Reload it before saving.']);
+            }
+            $body = data_get($this->post->versions()->where('is_original', true)->first()?->content, '0.body', '');
+            if ($this->exists('expected_body') && $body !== $this->input('expected_body')) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['post' => 'This draft changed elsewhere. Reload it before saving.']);
+            }
+            if ($this->post->isScheduled()) {
+                app(\Inovector\Mixpost\Support\PostScheduleGuard::class)->assertAvailable(
+                    $this->post,
+                    $this->scheduledAt() ? Util::convertTimeToUTC($this->scheduledAt(), $this->input('timezone')) : null,
+                    $this->input('accounts', []),
+                );
+            }
             if (empty($this->input('accounts')) || !$this->scheduledAt()) {
                 $this->post->setDraft();
             }
@@ -40,7 +58,7 @@ class UpdatePost extends PostFormRequest
 
 
             $this->post->setScheduled(
-                datetime: $this->scheduledAt() ? Util::convertTimeToUTC($this->scheduledAt()) : null,
+                datetime: $this->scheduledAt() ? Util::convertTimeToUTC($this->scheduledAt(), $this->input('timezone')) : null,
                 status: null,
             );
         });

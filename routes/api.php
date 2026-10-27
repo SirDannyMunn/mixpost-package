@@ -50,6 +50,7 @@ use Inovector\Mixpost\Http\Controllers\UpdateAuthUserPasswordController;
 
 
 Route::prefix('social')->name('social.api.')->group(function () {
+    Route::get('tiktok-media/{media}', \Inovector\Mixpost\Http\Controllers\Api\TikTokMediaController::class)->name('tiktok-media');
     // OAuth handoff token exchange (for Chrome extension)
     Route::post('oauth/exchange', [OAuthHandoffController::class, 'exchange'])
         ->name('oauth.exchange');
@@ -70,7 +71,22 @@ Route::middleware(['auth:sanctum', 'organization'])
         Route::get('/', DashboardApiController::class)->name('dashboard');
         Route::get('reports', ReportsController::class)->name('reports');
 
+        Route::prefix('automations')->name('automations.')->group(function () {
+            $controller = \Inovector\Mixpost\Http\Controllers\Api\AutomationsApiController::class;
+            Route::get('/', [$controller, 'index'])->name('index');
+            Route::post('/', [$controller, 'store'])->name('store');
+            Route::post('/engagement-events', [$controller, 'engagement'])->middleware('throttle:60,1')->name('engagement');
+            Route::put('/{automation}', [$controller, 'update'])->name('update');
+            Route::post('/{automation}/enabled', [$controller, 'toggle'])->name('toggle');
+            Route::get('/{automation}/runs', [$controller, 'runs'])->name('runs');
+        });
+
         Route::prefix('accounts')->name('accounts.')->group(function () {
+            $shared = \Inovector\Mixpost\Http\Controllers\Api\SharedConnectionsController::class;
+            Route::get('integrations', [$shared, 'index']);
+            Route::post('integrations/targets', [$shared, 'targets']);
+            Route::post('integrations/link', [$shared, 'store']);
+            Route::get('{account}/tiktok-creator', [AccountsApiController::class, 'tiktokCreator']);
             Route::get('/', [AccountsApiController::class, 'index'])->name('index');
             Route::post('add/{provider}', AddAccountController::class)->name('add');
             Route::put('update/{account}', [AccountsApiController::class, 'update'])->name('update');
