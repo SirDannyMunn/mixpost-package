@@ -32,6 +32,11 @@ class SharedSocialConnectionTest extends TestCase
     private function fake(string $provider = 'linkedin', ?string $org = null): void
     {
         Http::fake([
+            'https://nango.test/connections?*' => fn ($request) => Http::response(['connections' => [[
+                'connection_id' => 'connection-1',
+                'provider_config_key' => $request['integrationId'],
+                'tags' => ['organization_id' => $org ?? $this->org->id],
+            ]]]),
             'https://nango.test/connections/*' => fn ($request) => str_contains($request->url(), '/missing?') ? Http::response([], 404) : Http::response(['provider' => $provider, 'tags' => ['organization_id' => $org ?? $this->org->id], 'credentials' => ['access_token' => 'fresh-token', 'refresh_token' => 'never-copy-me']]),
             'https://api.linkedin.com/v2/userinfo' => Http::response(['sub' => 'person-1', 'name' => 'Test Person']),
             'https://graph.facebook.com/*' => Http::response(['data' => [['id' => 'page-1', 'name' => 'Test Page', 'access_token' => 'page-token']]]),
